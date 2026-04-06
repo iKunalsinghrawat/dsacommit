@@ -1,16 +1,16 @@
 import { notFound } from "next/navigation";
 
-import { Role, SubmissionState, UserPortal } from "@/generated/prisma/enums";
 import { ProblemWorkspace } from "@/components/problems/problem-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { requirePortalAccess, requireUser } from "@/lib/auth";
+import { Role, SubmissionState, UserPortal } from "@/generated/prisma/enums";
 import {
   toggleBookmarkAction,
   toggleRevisionAction,
   updateProblemStatusAction,
 } from "@/lib/actions/platform-actions";
+import { requirePortalAccess, requireUser } from "@/lib/auth";
 import { titleCase } from "@/lib/utils";
 import { getProblemById } from "@/server/public-data";
 
@@ -35,7 +35,7 @@ export default async function ProblemDetailPage({
       <PageHeader
         eyebrow="Problem detail"
         title={data.problem.title}
-        description={`${data.problem.topic.name} • ${titleCase(data.problem.difficulty)} • ${data.problem.estimatedMinutes} mins`}
+        description={`${data.problem.topic.name} - ${titleCase(data.problem.difficulty)} - ${data.problem.estimatedMinutes} mins`}
       />
 
       {user.role === Role.STUDENT ? (
@@ -48,7 +48,10 @@ export default async function ProblemDetailPage({
             <form action={updateProblemStatusAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
               <input name="status" type="hidden" value={SubmissionState.SOLVED} />
-              <button className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground" type="submit">
+              <button
+                className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+                type="submit"
+              >
                 Mark solved
               </button>
             </form>
@@ -133,8 +136,8 @@ export default async function ProblemDetailPage({
               <CardHeader>
                 <CardTitle>Code workspace</CardTitle>
                 <CardDescription>
-                  This problem currently supports progress tracking, notes, and revision workflows, but
-                  its executable judge is not configured yet.
+                  This problem currently supports progress tracking, notes, and revision workflows, but its executable
+                  judge is not configured yet.
                 </CardDescription>
               </CardHeader>
             </Card>

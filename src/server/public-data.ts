@@ -1,7 +1,161 @@
 import "server-only";
 
-import { Difficulty, Role, SubmissionState } from "@/generated/prisma/enums";
+import { CodeLanguage, Difficulty, Role, SubmissionState } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+
+const problemDetailBaseSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  difficulty: true,
+  problemStatement: true,
+  examples: true,
+  constraints: true,
+  hints: true,
+  editorial: true,
+  similarProblemSlugs: true,
+  roleFocus: true,
+  frequency: true,
+  estimatedMinutes: true,
+  isFeatured: true,
+  createdAt: true,
+  updatedAt: true,
+  topic: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
+  companyTags: {
+    select: {
+      id: true,
+      frequency: true,
+      role: true,
+      notes: true,
+      company: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+  },
+} as const;
+
+function isProblemWorkspaceSchemaError(error: unknown) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    code === "P2021" ||
+    code === "P2022" ||
+    /ProblemTestCase|CodeDraft|CodeSubmission|codeExecutionEnabled|starterCode|starterLanguage/i.test(message)
+  );
+}
+
+function getFallbackProblemWorkspaceState() {
+  return {
+    codeExecutionEnabled: false,
+    starterCode: null,
+    starterLanguage: CodeLanguage.TYPESCRIPT,
+    testCases: [],
+  };
+}
+
+async function getProblemRecord(id: string) {
+  try {
+    const problem = await prisma.problem.findUnique({
+      where: { id },
+      select: {
+        ...problemDetailBaseSelect,
+        codeExecutionEnabled: true,
+        starterCode: true,
+        starterLanguage: true,
+        testCases: {
+          where: { isHidden: false },
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            label: true,
+            input: true,
+            expectedOutput: true,
+            isHidden: true,
+            sortOrder: true,
+          },
+        },
+      },
+    });
+
+    return {
+      problem,
+      workspaceSchemaAvailable: true,
+    };
+  } catch (error) {
+    if (!isProblemWorkspaceSchemaError(error)) {
+      throw error;
+    }
+
+    const fallbackProblem = await prisma.problem.findUnique({
+      where: { id },
+      select: problemDetailBaseSelect,
+    });
+
+    return {
+      problem: fallbackProblem
+        ? {
+            ...fallbackProblem,
+            ...getFallbackProblemWorkspaceState(),
+          }
+        : null,
+      workspaceSchemaAvailable: false,
+    };
+  }
+}
+
+async function getCodeWorkspaceRecords(input: {
+  userId?: string;
+  problemId: string;
+  workspaceSchemaAvailable: boolean;
+}) {
+  if (!input.userId || !input.workspaceSchemaAvailable) {
+    return {
+      codeDrafts: [],
+      codeSubmissions: [],
+    };
+  }
+
+  try {
+    const [codeDrafts, codeSubmissions] = await Promise.all([
+      prisma.codeDraft.findMany({
+        where: { userId: input.userId, problemId: input.problemId },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.codeSubmission.findMany({
+        where: { userId: input.userId, problemId: input.problemId },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      codeDrafts,
+      codeSubmissions,
+    };
+  } catch (error) {
+    if (!isProblemWorkspaceSchemaError(error)) {
+      throw error;
+    }
+
+    return {
+      codeDrafts: [],
+      codeSubmissions: [],
+    };
+  }
+}
 
 export async function getLandingPageData() {
   const [featuredCompanies, featuredMentors, topStudents, featuredChallenges, wallPosts] =
@@ -130,18 +284,8 @@ export async function getProblemsList(filters?: {
 }
 
 export async function getProblemById(id: string, userId?: string) {
-  const [problem, submission, bookmark, revision, codeDrafts, codeSubmissions] = await Promise.all([
-    prisma.problem.findUnique({
-      where: { id },
-      include: {
-        topic: true,
-        companyTags: { include: { company: true } },
-        testCases: {
-          where: { isHidden: false },
-          orderBy: { sortOrder: "asc" },
-        },
-      },
-    }),
+  const [{ problem, workspaceSchemaAvailable }, submission, bookmark, revision] = await Promise.all([
+    getProblemRecord(id),
     userId
       ? prisma.submissionStatus.findUnique({
           where: { userId_problemId: { userId, problemId: id } },
@@ -157,30 +301,32 @@ export async function getProblemById(id: string, userId?: string) {
           where: { userId_problemId: { userId, problemId: id } },
         })
       : null,
-    userId
-      ? prisma.codeDraft.findMany({
-          where: { userId, problemId: id },
-          orderBy: { updatedAt: "desc" },
-        })
-      : [],
-    userId
-      ? prisma.codeSubmission.findMany({
-          where: { userId, problemId: id },
-          orderBy: { createdAt: "desc" },
-        })
-      : [],
   ]);
 
   if (!problem) {
     return null;
   }
 
+  const { codeDrafts, codeSubmissions } = await getCodeWorkspaceRecords({
+    userId,
+    problemId: id,
+    workspaceSchemaAvailable,
+  });
+
   const similarProblems = problem.similarProblemSlugs.length
     ? await prisma.problem.findMany({
         where: {
           slug: { in: problem.similarProblemSlugs },
         },
-        include: { topic: true },
+        select: {
+          id: true,
+          title: true,
+          topic: {
+            select: {
+              name: true,
+            },
+          },
+        },
       })
     : [];
 
