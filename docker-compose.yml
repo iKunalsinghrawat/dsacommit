@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dsa-commit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dsa_commit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dsa_commit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dsa-commit-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/dsa_commit?schema=public
+      AUTH_SECRET: replace-with-a-long-random-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      SEED_DEFAULT_PASSWORD: Commit@123
+    ports:
+      - "3000:3000"
+    command: >
+      sh -c "npx prisma migrate deploy &&
+             npm run db:seed &&
+             npm start"
+
+volumes:
+  postgres_data:

@@ -1,0 +1,135 @@
+⚠ Slow filesystem detected. The benchmark took 997ms. If E:\Downloads\online zero to hero\dsa-commit\.next/dev is a network drive, consider moving it to a local folder.
+See more: https://nextjs.org/docs/app/guides/local-development
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}
+Error: Can't resolve 'tailwindcss' in 'E:\Downloads\online zero to hero'
+    [2m[at finishWithoutResolve (E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:16:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at E:\Downloads\online zero to hero\dsa-commit\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (E:\Downloads\online zero to hero\dsa-commit\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m {
+  details: "resolve 'tailwindcss' in 'E:\\Downloads\\online zero to hero'\n" +
+    '  Parsed request is a module\n' +
+    '  No description file found in E:\\Downloads\\online zero to hero or above\n' +
+    '  resolve as module\n' +
+    "    E:\\Downloads\\online zero to hero\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\Downloads\\node_modules doesn't exist or is not a directory\n" +
+    "    E:\\node_modules doesn't exist or is not a directory"
+}

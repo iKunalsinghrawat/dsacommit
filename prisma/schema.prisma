@@ -1,0 +1,648 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  MENTOR
+  COMPANY
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+  DEACTIVATED
+  DELETED
+}
+
+enum UserPortal {
+  DASHBOARD
+  ROADMAP
+  TOPICS
+  PROBLEMS
+  COMPANIES
+  MENTORS
+  COMMUNITY
+  PROFILE
+  COMPANY_PORTAL
+  ADMIN_PORTAL
+  MODERATION
+  POSTING
+}
+
+enum StudentLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CareerTarget {
+  INTERNSHIP
+  PLACEMENT
+  SWITCH
+}
+
+enum RoadmapLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum CodeLanguage {
+  TYPESCRIPT
+  JAVASCRIPT
+}
+
+enum SubmissionState {
+  UNSOLVED
+  ATTEMPTED
+  SOLVED
+}
+
+enum CodeExecutionStatus {
+  PASSED
+  PARTIAL
+  FAILED
+  RUNTIME_ERROR
+  SYNTAX_ERROR
+  TIMEOUT
+}
+
+enum ChallengeType {
+  SEVEN_DAY
+  THIRTY_DAY
+  CUSTOM
+}
+
+enum ParticipationStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+}
+
+enum CommunityPostType {
+  DISCUSSION
+  DOUBT
+  COMPANY_PREP
+  UPDATE
+}
+
+enum CompanyContentType {
+  GUIDANCE
+  EVENT
+}
+
+enum MentorQuestionStatus {
+  OPEN
+  ANSWERED
+  ARCHIVED
+}
+
+enum BadgeCategory {
+  STREAK
+  CONSISTENCY
+  MASTERY
+  COMMUNITY
+  CHALLENGE
+  COMPANY_PREP
+}
+
+enum BadgeRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+model User {
+  id               String                @id @default(cuid())
+  email            String                @unique
+  passwordHash     String
+  name             String
+  slug             String                @unique
+  role             Role
+  status           UserStatus            @default(ACTIVE)
+  accessGrants     UserPortal[]          @default([])
+  avatarUrl        String?
+  headline         String?
+  bio              String?
+  location         String?
+  githubUrl        String?
+  linkedinUrl      String?
+  portfolioUrl     String?
+  isVerified       Boolean               @default(false)
+  isFeatured       Boolean               @default(false)
+  isOnboarded      Boolean               @default(false)
+  passwordResetRequired Boolean          @default(false)
+  sessionVersion   Int                   @default(0)
+  deletedAt        DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  lastActiveAt     DateTime?
+  studentProfile   StudentProfile?
+  mentorProfile    MentorProfile?
+  ownedCompany     CompanyProfile?       @relation("CompanyOwner")
+  submissionStatus SubmissionStatus[]
+  bookmarks        Bookmark[]
+  revisionQueue    RevisionQueue[]
+  dailyCheckins    DailyCheckin[]
+  streak           Streak?
+  participations   ChallengeParticipation[]
+  commitmentPosts  CommitmentPost[]
+  communityPosts   CommunityPost[]       @relation("CommunityAuthor")
+  comments         Comment[]
+  postLikes        PostLike[]
+  progress         Progress[]
+  userBadges       UserBadge[]
+  codeSubmissions  CodeSubmission[]
+
+  @@index([role, isFeatured])
+  @@index([status, role])
+}
+
+model StudentProfile {
+  userId                  String                @id
+  currentLevel            StudentLevel
+  target                  CareerTarget
+  dailyAvailableHours     Int
+  preferredLanguage       String
+  weeklyConsistencyScore  Int                   @default(0)
+  monthlyCommitmentScore  Int                   @default(0)
+  commitmentScore         Int                   @default(0)
+  questionsSolvedCount    Int                   @default(0)
+  bookmarkedCount         Int                   @default(0)
+  revisionCount           Int                   @default(0)
+  challengePoints         Int                   @default(0)
+  about                   String?
+  user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCompanies         StudentTargetCompany[]
+  weakTopics              StudentWeakTopic[]
+  mentorFollows           MentorFollower[]
+  mentorQuestions         MentorQuestion[]
+
+  @@index([currentLevel, target])
+}
+
+model MentorProfile {
+  userId                 String          @id
+  companyId              String?
+  roleTitle              String
+  experienceYears        Int
+  bio                    String
+  expertiseTags          String[]
+  verifiedBadge          Boolean         @default(false)
+  featured               Boolean         @default(false)
+  officeHours            String?
+  recommendedSetTitle    String?
+  recommendedSetSummary  String?
+  user                   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company                CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  mentorPosts            MentorPost[]
+  followers              MentorFollower[]
+  questions              MentorQuestion[]
+
+  @@index([companyId, featured])
+}
+
+model CompanyProfile {
+  id                String          @id @default(cuid())
+  ownerId           String?         @unique
+  name              String          @unique
+  slug              String          @unique
+  overview          String
+  industry          String?
+  website           String?
+  hiringFocusAreas  String[]
+  commonFocusTopics String[]
+  rolePreferences   String[]
+  oaPattern         String[]
+  interviewRounds   String[]
+  preparationTips   String[]
+  recommendedRoadmap String[]
+  featured          Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  owner             User?           @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  mentors           MentorProfile[]
+  mentorPosts       MentorPost[]
+  roles             CompanyRole[]
+  contents          CompanyContent[]
+  problemTags       ProblemCompanyTag[]
+  targetStudents    StudentTargetCompany[]
+  communityPosts    CommunityPost[]
+
+  @@index([featured])
+}
+
+model Topic {
+  id                    String          @id @default(cuid())
+  name                  String          @unique
+  slug                  String          @unique
+  level                 RoadmapLevel
+  sortOrder             Int
+  conceptSummary        String
+  notes                 String
+  difficultyProgression String[]
+  revisionChecklist     String[]
+  quiz                  Json
+  estimatedHours        Int
+  icon                  String
+  accentColor           String
+  problems              Problem[]
+  weakStudents          StudentWeakTopic[]
+  progress              Progress[]
+  communityPosts        CommunityPost[]
+
+  @@index([level, sortOrder])
+}
+
+model Problem {
+  id                String             @id @default(cuid())
+  title             String
+  slug              String             @unique
+  difficulty        Difficulty
+  topicId           String
+  problemStatement  String
+  examples          Json
+  constraints       String[]
+  hints             String[]
+  editorial         String
+  similarProblemSlugs String[]
+  roleFocus         String?
+  frequency         Int                @default(3)
+  estimatedMinutes  Int
+  isFeatured        Boolean            @default(false)
+  codeExecutionEnabled Boolean         @default(false)
+  starterCode       String?
+  starterLanguage   CodeLanguage       @default(TYPESCRIPT)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  topic             Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  companyTags       ProblemCompanyTag[]
+  submissionStatus  SubmissionStatus[]
+  bookmarks         Bookmark[]
+  revisionQueue     RevisionQueue[]
+  testCases         ProblemTestCase[]
+  codeSubmissions   CodeSubmission[]
+
+  @@index([topicId, difficulty])
+  @@index([isFeatured, frequency])
+}
+
+model ProblemCompanyTag {
+  id        String         @id @default(cuid())
+  problemId String
+  companyId String
+  frequency Int            @default(3)
+  role      String?
+  notes     String?
+  problem   Problem        @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  company   CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, companyId])
+  @@index([companyId, frequency])
+}
+
+model Progress {
+  id                  String   @id @default(cuid())
+  userId              String
+  topicId             String
+  solvedProblemsCount Int      @default(0)
+  totalProblemsSnapshot Int    @default(0)
+  completionPercentage Float   @default(0)
+  confidenceScore     Int      @default(0)
+  note                String?
+  lastPracticedAt     DateTime?
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic               Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, topicId])
+  @@index([completionPercentage])
+}
+
+model SubmissionStatus {
+  id              String          @id @default(cuid())
+  userId          String
+  problemId       String
+  status          SubmissionState
+  attempts        Int             @default(0)
+  language        String?
+  timeSpentMinutes Int?
+  note            String?
+  solvedAt        DateTime?
+  lastViewedAt    DateTime        @default(now())
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem         Problem         @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, problemId])
+  @@index([userId, status])
+}
+
+model ProblemTestCase {
+  id             String   @id @default(cuid())
+  problemId      String
+  label          String?
+  input          String
+  expectedOutput String
+  isHidden       Boolean  @default(false)
+  sortOrder      Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  problem        Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, sortOrder])
+  @@index([problemId, isHidden, sortOrder])
+}
+
+model CodeSubmission {
+  id           String              @id @default(cuid())
+  userId       String
+  problemId    String
+  language     CodeLanguage
+  code         String
+  passedCount  Int                 @default(0)
+  totalCount   Int                 @default(0)
+  status       CodeExecutionStatus
+  runtimeMs    Int?
+  errorMessage String?
+  createdAt    DateTime            @default(now())
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem      Problem             @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, problemId, createdAt])
+  @@index([problemId, createdAt])
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  problemId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, problemId])
+}
+
+model RevisionQueue {
+  id        String   @id @default(cuid())
+  userId    String
+  problemId String
+  remindOn  DateTime
+  reason    String?
+  priority  Int      @default(2)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, problemId])
+  @@index([userId, remindOn])
+}
+
+model DailyCheckin {
+  id              String          @id @default(cuid())
+  userId          String
+  date            DateTime
+  minutesCommitted Int
+  targetMinutes   Int
+  note            String?
+  solvedCount     Int             @default(0)
+  pointsEarned    Int             @default(0)
+  sharedToWall    Boolean         @default(false)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commitmentPost  CommitmentPost?
+
+  @@unique([userId, date])
+  @@index([date])
+}
+
+model Streak {
+  userId          String   @id
+  currentStreak   Int      @default(0)
+  bestStreak      Int      @default(0)
+  totalCheckins   Int      @default(0)
+  lastCheckinDate DateTime?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Challenge {
+  id            String                 @id @default(cuid())
+  title         String
+  slug          String                 @unique
+  description   String
+  type          ChallengeType
+  durationDays  Int
+  targetValue   Int
+  badgeId       String?
+  isFeatured    Boolean                @default(false)
+  startDate     DateTime
+  endDate       DateTime
+  createdAt     DateTime               @default(now())
+  badge         Badge?                 @relation("ChallengeReward", fields: [badgeId], references: [id], onDelete: SetNull)
+  participations ChallengeParticipation[]
+
+  @@index([isFeatured, startDate])
+}
+
+model ChallengeParticipation {
+  id                   String              @id @default(cuid())
+  challengeId          String
+  userId               String
+  joinedAt             DateTime            @default(now())
+  progressDays         Int                 @default(0)
+  completionPercentage Int                 @default(0)
+  completedAt          DateTime?
+  status               ParticipationStatus @default(ACTIVE)
+  challenge            Challenge           @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId, status])
+}
+
+model CommitmentPost {
+  id              String       @id @default(cuid())
+  userId          String
+  checkinId       String?      @unique
+  caption         String
+  minutesCommitted Int
+  solvedCount     Int          @default(0)
+  isPublic        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkin         DailyCheckin? @relation(fields: [checkinId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
+
+model CommunityPost {
+  id          String            @id @default(cuid())
+  authorId    String
+  topicId     String?
+  companyId   String?
+  type        CommunityPostType
+  title       String
+  content     String
+  likeCount   Int               @default(0)
+  commentCount Int              @default(0)
+  isReported  Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  author      User              @relation("CommunityAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  topic       Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  company     CompanyProfile?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  comments    Comment[]
+  likes       PostLike[]
+
+  @@index([type, createdAt])
+  @@index([isReported])
+}
+
+model Comment {
+  id        String        @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+model PostLike {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+}
+
+model Badge {
+  id              String      @id @default(cuid())
+  name            String
+  slug            String      @unique
+  description     String
+  criteria        String
+  category        BadgeCategory
+  rarity          BadgeRarity
+  icon            String
+  pointValue      Int         @default(0)
+  users           UserBadge[]
+  challengeRewards Challenge[] @relation("ChallengeReward")
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+  note      String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+}
+
+model StudentTargetCompany {
+  id        String         @id @default(cuid())
+  studentId String
+  companyId String
+  student   StudentProfile @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  company   CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, companyId])
+}
+
+model StudentWeakTopic {
+  id        String         @id @default(cuid())
+  studentId String
+  topicId   String
+  student   StudentProfile @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+  topic     Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, topicId])
+}
+
+model MentorFollower {
+  id        String         @id @default(cuid())
+  mentorId  String
+  studentId String
+  createdAt DateTime       @default(now())
+  mentor    MentorProfile  @relation(fields: [mentorId], references: [userId], onDelete: Cascade)
+  student   StudentProfile @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+
+  @@unique([mentorId, studentId])
+}
+
+model MentorPost {
+  id                   String          @id @default(cuid())
+  mentorId             String
+  companyId            String?
+  title                String
+  excerpt              String
+  content              String
+  tags                 String[]
+  recommendedProblemSlugs String[]
+  createdAt            DateTime        @default(now())
+  mentor               MentorProfile   @relation(fields: [mentorId], references: [userId], onDelete: Cascade)
+  company              CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([mentorId, createdAt])
+}
+
+model MentorQuestion {
+  id        String               @id @default(cuid())
+  mentorId  String
+  studentId String
+  title     String
+  question  String
+  status    MentorQuestionStatus @default(OPEN)
+  createdAt DateTime             @default(now())
+  mentor    MentorProfile        @relation(fields: [mentorId], references: [userId], onDelete: Cascade)
+  student   StudentProfile       @relation(fields: [studentId], references: [userId], onDelete: Cascade)
+
+  @@index([mentorId, status])
+}
+
+model CompanyRole {
+  id         String         @id @default(cuid())
+  companyId  String
+  title      String
+  roleType   String
+  focusAreas String[]
+  location   String?
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  company    CompanyProfile @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, isActive])
+}
+
+model CompanyContent {
+  id        String             @id @default(cuid())
+  companyId String
+  title     String
+  content   String
+  category  CompanyContentType
+  createdAt DateTime           @default(now())
+  company   CompanyProfile     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, category, createdAt])
+}
