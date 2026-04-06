@@ -11,7 +11,7 @@ import {
 import { passwordSchema } from "@/lib/validators/auth";
 import { z } from "zod";
 
-export const MAX_CODE_SIZE = 20000;
+export const MAX_CODE_SIZE = 50000;
 
 const optionalText = (max: number) =>
   z
@@ -124,6 +124,15 @@ export const adminReportedPostSchema = z.object({
 export const problemExecutionSchema = z.object({
   language: z.enum(CodeLanguage),
   code: z.string().trim().min(1).max(MAX_CODE_SIZE),
+});
+
+export const problemDraftSchema = z.object({
+  language: z.enum(CodeLanguage),
+  code: z.string().max(MAX_CODE_SIZE),
+});
+
+export const deleteProblemDraftSchema = z.object({
+  language: z.enum(CodeLanguage),
 });
 
 const manageUserFields = z.object({

@@ -28,6 +28,7 @@ DSA Commit is a production-ready full-stack MVP for disciplined DSA preparation.
 - Student dashboard with today’s task, streaks, consistency scores, heatmap, bookmarks, revision queue, challenge cards, company tracker, and recommended next questions
 - Roadmap, topic library, and topic detail pages
 - Problem catalog and problem detail pages with hints, editorial, company tags, bookmark/revision/solve tracking
+- Multi-language code workspace with per-problem per-language draft saving
 - Company pages with focus areas, OA pattern, interview rounds, tips, and tagged questions
 - Mentor pages with follow, doubt posting, and guidance content
 - Community feed with post creation, likes, and comments
@@ -46,6 +47,7 @@ Main models include:
 - `CompanyProfile`
 - `Topic`
 - `Problem`
+- `CodeDraft`
 - `ProblemCompanyTag`
 - `Progress`
 - `SubmissionStatus`
@@ -132,6 +134,44 @@ npm run build
 npm run db:seed
 npm run db:studio
 ```
+
+## Multi-language workspace
+
+The coding workspace now supports:
+
+- `C`
+- `C++`
+- `Java`
+- `Python`
+- `JavaScript`
+- `TypeScript`
+- `Go`
+- `C#`
+- `Kotlin`
+- `Rust`
+
+Drafts are saved separately by:
+
+- `userId`
+- `problemId`
+- `language`
+
+The workspace language catalog lives in [`src/config/languages.ts`](./src/config/languages.ts), so new runtimes can be added from one place.
+The last selected language also persists per problem after refresh.
+
+Current execution support:
+
+- `JavaScript`
+- `TypeScript`
+
+The remaining languages already have:
+
+- syntax highlighting
+- language-specific starter templates
+- per-language draft persistence
+- execution-ready backend branching
+
+This means a real sandbox or judge can be plugged in later without changing the workspace UI model.
 
 ## Docker
 
@@ -253,7 +293,7 @@ prisma/
 
 ## Known limitations
 
-- No remote code execution engine is included in this MVP.
+- Real code execution is currently active for JavaScript and TypeScript only. Other workspace languages are fully available in draft mode and are ready for future sandbox integration.
 - Community moderation is intentionally lightweight.
 - Mentor mock interview slot booking is represented as a workflow placeholder rather than a calendar integration.
 - Company portal is single-owner in this MVP rather than multi-member.

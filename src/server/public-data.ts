@@ -130,7 +130,7 @@ export async function getProblemsList(filters?: {
 }
 
 export async function getProblemById(id: string, userId?: string) {
-  const [problem, submission, bookmark, revision, latestCodeSubmission] = await Promise.all([
+  const [problem, submission, bookmark, revision, codeDrafts, codeSubmissions] = await Promise.all([
     prisma.problem.findUnique({
       where: { id },
       include: {
@@ -158,11 +158,17 @@ export async function getProblemById(id: string, userId?: string) {
         })
       : null,
     userId
-      ? prisma.codeSubmission.findFirst({
+      ? prisma.codeDraft.findMany({
+          where: { userId, problemId: id },
+          orderBy: { updatedAt: "desc" },
+        })
+      : [],
+    userId
+      ? prisma.codeSubmission.findMany({
           where: { userId, problemId: id },
           orderBy: { createdAt: "desc" },
         })
-      : null,
+      : [],
   ]);
 
   if (!problem) {
@@ -184,7 +190,17 @@ export async function getProblemById(id: string, userId?: string) {
     submissionStatus: submission ?? null,
     isBookmarked: Boolean(bookmark),
     inRevisionQueue: Boolean(revision),
-    latestCodeSubmission,
+    codeDrafts,
+    latestCodeSubmissions: codeSubmissions.reduce<Array<(typeof codeSubmissions)[number]>>(
+      (accumulator, submissionItem) => {
+        if (!accumulator.some((existing) => existing.language === submissionItem.language)) {
+          accumulator.push(submissionItem);
+        }
+
+        return accumulator;
+      },
+      [],
+    ),
   };
 }
 

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth";
 import { problemExecutionSchema } from "@/lib/validators/platform";
-import { runProblemCode } from "@/server/problem-execution-service";
+import {
+  canExecuteLanguage,
+  getUnsupportedExecutionMessage,
+  runProblemCode,
+} from "@/server/problem-execution-service";
 
 export async function POST(
   request: Request,
@@ -28,6 +32,16 @@ export async function POST(
         error: parsed.error.issues[0]?.message ?? "Invalid run request.",
       },
       { status: 400 },
+    );
+  }
+
+  if (!canExecuteLanguage(parsed.data.language)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: getUnsupportedExecutionMessage(parsed.data.language),
+      },
+      { status: 422 },
     );
   }
 
