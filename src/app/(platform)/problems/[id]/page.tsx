@@ -24,7 +24,7 @@ export default async function ProblemDetailPage({
   const { id } = await params;
   await requirePortalAccess(UserPortal.PROBLEMS);
   const user = await requireUser();
-  const data = await getProblemById(id, user.role === Role.STUDENT ? user.id : undefined);
+  const data = await getProblemById(id, user.id);
 
   if (!data) {
     notFound();
@@ -119,9 +119,11 @@ export default async function ProblemDetailPage({
         <div className="space-y-6">
           {data.problem.codeExecutionEnabled && data.problem.starterCode ? (
             <ProblemWorkspace
-              latestCodeSubmission={data.latestCodeSubmission}
+              codeDrafts={data.codeDrafts}
+              latestCodeSubmissions={data.latestCodeSubmissions}
               problemId={data.problem.id}
               problemTitle={data.problem.title}
+              problemExamples={data.problem.examples as Array<{ input: string; output: string; explanation: string }>}
               starterCode={data.problem.starterCode}
               starterLanguage={data.problem.starterLanguage}
               visibleTestCases={data.problem.testCases}

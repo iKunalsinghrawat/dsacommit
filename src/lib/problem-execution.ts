@@ -3,6 +3,7 @@ import "server-only";
 import { Script, createContext } from "node:vm";
 import ts from "typescript";
 
+import { getExecutionUnavailableMessage, supportsLocalExecution } from "@/config/languages";
 import { CodeExecutionStatus, CodeLanguage } from "@/generated/prisma/enums";
 
 const MODULE_BOOT_TIMEOUT_MS = 400;
@@ -283,6 +284,35 @@ export function executeProblemCode(input: {
   revealHiddenDetails?: boolean;
 }): ExecutionResponse {
   const startedAt = performance.now();
+
+  if (!supportsLocalExecution(input.language)) {
+    const message = getExecutionUnavailableMessage(input.language);
+
+    return {
+      summary: {
+        passedCount: 0,
+        totalCount: input.testCases.length,
+        status: CodeExecutionStatus.RUNTIME_ERROR,
+        runtimeMs: Math.max(1, Math.round(performance.now() - startedAt)),
+      },
+      results: input.testCases.map((testCase) =>
+        maskResult(
+          {
+            id: testCase.id,
+            label: testCase.label ?? `Test ${testCase.sortOrder}`,
+            isHidden: testCase.isHidden,
+            status: CodeExecutionStatus.RUNTIME_ERROR,
+            passed: false,
+            input: testCase.input,
+            expectedOutput: testCase.expectedOutput,
+            actualOutput: null,
+            errorMessage: message,
+          },
+          input.revealHiddenDetails ?? false,
+        ),
+      ),
+    };
+  }
 
   try {
     const compiledCode = transpileSubmission(input.code, input.language);

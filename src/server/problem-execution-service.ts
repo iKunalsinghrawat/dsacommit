@@ -6,7 +6,13 @@ import {
   Role,
   SubmissionState,
 } from "@/generated/prisma/enums";
-import { executeProblemCode } from "@/lib/problem-execution";
+import {
+  getExecutionUnavailableMessage,
+  supportsLocalExecution,
+} from "@/config/languages";
+import {
+  executeProblemCode,
+} from "@/lib/problem-execution";
 import { prisma } from "@/lib/prisma";
 import { refreshStudentProfile } from "@/lib/student-progress";
 
@@ -133,4 +139,85 @@ export async function submitProblemCode(input: {
   }
 
   return result;
+}
+
+export function getUnsupportedExecutionMessage(language: CodeLanguage) {
+  return getExecutionUnavailableMessage(language);
+}
+
+export function canExecuteLanguage(language: CodeLanguage) {
+  return supportsLocalExecution(language);
+}
+
+export async function saveProblemDraft(input: {
+  userId: string;
+  problemId: string;
+  language: CodeLanguage;
+  code: string;
+}) {
+  const problem = await prisma.problem.findUnique({
+    where: { id: input.problemId },
+    select: {
+      id: true,
+      codeExecutionEnabled: true,
+    },
+  });
+
+  if (!problem || !problem.codeExecutionEnabled) {
+    return null;
+  }
+
+  return prisma.codeDraft.upsert({
+    where: {
+      userId_problemId_language: {
+        userId: input.userId,
+        problemId: input.problemId,
+        language: input.language,
+      },
+    },
+    create: {
+      userId: input.userId,
+      problemId: input.problemId,
+      language: input.language,
+      sourceCode: input.code,
+    },
+    update: {
+      sourceCode: input.code,
+    },
+    select: {
+      language: true,
+      sourceCode: true,
+      updatedAt: true,
+    },
+  });
+}
+
+export async function deleteProblemDraft(input: {
+  userId: string;
+  problemId: string;
+  language: CodeLanguage;
+}) {
+  const problem = await prisma.problem.findUnique({
+    where: { id: input.problemId },
+    select: {
+      id: true,
+      codeExecutionEnabled: true,
+    },
+  });
+
+  if (!problem || !problem.codeExecutionEnabled) {
+    return null;
+  }
+
+  await prisma.codeDraft.deleteMany({
+    where: {
+      userId: input.userId,
+      problemId: input.problemId,
+      language: input.language,
+    },
+  });
+
+  return {
+    language: input.language,
+  };
 }

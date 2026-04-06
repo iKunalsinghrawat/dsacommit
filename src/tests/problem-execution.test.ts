@@ -98,4 +98,19 @@ describe("problem execution service", () => {
       actualOutput: null,
     });
   });
+
+  it("returns a clear runtime message for languages whose execution backend is not configured yet", () => {
+    const result = executeProblemCode({
+      code: `
+def solve(raw_input: str) -> str:
+    return "3"
+      `,
+      language: CodeLanguage.PYTHON,
+      testCases: sampleCases,
+      revealHiddenDetails: false,
+    });
+
+    expect(result.summary.status).toBe(CodeExecutionStatus.RUNTIME_ERROR);
+    expect(result.results[0]?.errorMessage).toContain("Python draft support is ready");
+  });
 });

@@ -9,6 +9,8 @@ import { CodeExecutionStatus, CodeLanguage, Role } from "@/generated/prisma/enum
 const getCurrentUser = vi.fn();
 const runProblemCode = vi.fn();
 const submitProblemCode = vi.fn();
+const canExecuteLanguage = vi.fn();
+const getUnsupportedExecutionMessage = vi.fn();
 const revalidatePath = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
@@ -16,6 +18,8 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/server/problem-execution-service", () => ({
+  canExecuteLanguage,
+  getUnsupportedExecutionMessage,
   runProblemCode,
   submitProblemCode,
 }));
@@ -30,6 +34,8 @@ const submitRoute = await import("@/app/api/problems/[id]/submit/route");
 describe("problem execution routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    canExecuteLanguage.mockReturnValue(true);
+    getUnsupportedExecutionMessage.mockReturnValue("Execution is not configured for this language yet.");
   });
 
   it("rejects unauthenticated run requests", async () => {
@@ -84,6 +90,26 @@ describe("problem execution routes", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.result.summary.passedCount).toBe(2);
+  });
+
+  it("rejects unsupported execution languages with a clear message", async () => {
+    getCurrentUser.mockResolvedValue({ id: "user-1", role: Role.STUDENT });
+    canExecuteLanguage.mockReturnValue(false);
+    getUnsupportedExecutionMessage.mockReturnValue("Python draft support is ready, but code execution for this runtime is not configured yet.");
+
+    const response = await runRoute.POST(new Request("http://localhost/api/problems/p1/run", {
+      method: "POST",
+      body: JSON.stringify({
+        code: "def solve(raw_input: str): return '1'",
+        language: CodeLanguage.PYTHON,
+      }),
+    }), {
+      params: Promise.resolve({ id: "problem-1" }),
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(payload.error).toContain("Python draft support is ready");
   });
 
   it("persists submit results and revalidates affected pages", async () => {

@@ -61,6 +61,14 @@ enum Difficulty {
 }
 
 enum CodeLanguage {
+  C
+  CPP
+  JAVA
+  PYTHON
+  GO
+  CSHARP
+  KOTLIN
+  RUST
   TYPESCRIPT
   JAVASCRIPT
 }
@@ -166,6 +174,7 @@ model User {
   postLikes        PostLike[]
   progress         Progress[]
   userBadges       UserBadge[]
+  codeDrafts       CodeDraft[]
   codeSubmissions  CodeSubmission[]
 
   @@index([role, isFeatured])
@@ -295,6 +304,7 @@ model Problem {
   bookmarks         Bookmark[]
   revisionQueue     RevisionQueue[]
   testCases         ProblemTestCase[]
+  codeDrafts        CodeDraft[]
   codeSubmissions   CodeSubmission[]
 
   @@index([topicId, difficulty])
@@ -383,6 +393,22 @@ model CodeSubmission {
 
   @@index([userId, problemId, createdAt])
   @@index([problemId, createdAt])
+}
+
+model CodeDraft {
+  id         String       @id @default(cuid())
+  userId     String
+  problemId  String
+  language   CodeLanguage
+  sourceCode String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem    Problem      @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, problemId, language])
+  @@index([userId, updatedAt])
+  @@index([problemId, language])
 }
 
 model Bookmark {
