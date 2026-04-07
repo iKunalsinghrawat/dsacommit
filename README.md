@@ -30,6 +30,7 @@ DSA Commit is a production-ready full-stack MVP for disciplined DSA preparation.
 - Problem catalog and problem detail pages with hints, editorial, company tags, bookmark/revision/solve tracking
 - Multi-language code workspace with per-problem per-language draft saving
 - Request-based approval workflow for roadmap items, topics, and problems
+- Profile settings with public/private visibility controls
 - Company pages with focus areas, OA pattern, interview rounds, tips, and tagged questions
 - Mentor pages with follow, doubt posting, and guidance content
 - Community feed with post creation, likes, and comments

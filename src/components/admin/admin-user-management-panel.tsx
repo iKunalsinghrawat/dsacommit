@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import {
   CareerTarget,
+  ProfileVisibility,
   Role,
   StudentLevel,
   UserPortal,
@@ -36,6 +37,7 @@ type ManagedUser = {
   slug: string;
   role: Role;
   status: UserStatus;
+  profileVisibility: ProfileVisibility;
   accessGrants: UserPortal[];
   avatarUrl: string | null;
   headline: string | null;
@@ -90,6 +92,7 @@ function createProfileState(managedUser: ManagedUser) {
     slug: managedUser.slug,
     role: managedUser.role,
     status: managedUser.status,
+    profileVisibility: managedUser.profileVisibility,
     accessGrants: [...managedUser.accessGrants],
     headline: managedUser.headline ?? "",
     bio: managedUser.bio ?? "",
@@ -204,6 +207,7 @@ export function AdminUserManagementPanel({
     formData.set("slug", profileState.slug);
     formData.set("role", profileState.role);
     formData.set("status", profileState.status);
+    formData.set("profileVisibility", profileState.profileVisibility);
     formData.set("headline", profileState.headline);
     formData.set("bio", profileState.bio);
     formData.set("location", profileState.location);
@@ -511,6 +515,23 @@ export function AdminUserManagementPanel({
                 ))}
               </Select>
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="managed-visibility">
+                Profile privacy
+              </label>
+              <Select
+                disabled={isRemoved}
+                id="managed-visibility"
+                onChange={(event) =>
+                  updateState("profileVisibility", event.target.value as ProfileVisibility)
+                }
+                value={profileState.profileVisibility}
+              >
+                <option value={ProfileVisibility.PUBLIC}>Public profile</option>
+                <option value={ProfileVisibility.PRIVATE}>Private profile</option>
+              </Select>
+              <FieldError fieldErrors={fieldErrors} name="profileVisibility" />
+            </div>
             <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm">
               <input checked={profileState.isVerified} className="accent-[var(--primary)]" onChange={(event) => updateState("isVerified", event.target.checked)} type="checkbox" />
               Verified profile
@@ -592,7 +613,7 @@ export function AdminUserManagementPanel({
               <div className="grid gap-4 xl:grid-cols-2">
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Target companies</p>
-                  <div className="grid gap-3">
+                  <div className="grid max-h-64 gap-3 overflow-y-auto pr-1">
                     {companies.map((company) => (
                       <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm" key={company.id}>
                         <input checked={profileState.studentTargetCompanyIds.includes(company.id)} className="accent-[var(--primary)]" onChange={() => toggleSelection("studentTargetCompanyIds", company.id)} type="checkbox" />
@@ -603,7 +624,7 @@ export function AdminUserManagementPanel({
                 </div>
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Weak topics</p>
-                  <div className="grid gap-3">
+                  <div className="grid max-h-64 gap-3 overflow-y-auto pr-1">
                     {topics.map((topic) => (
                       <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm" key={topic.id}>
                         <input checked={profileState.studentWeakTopicIds.includes(topic.id)} className="accent-[var(--primary)]" onChange={() => toggleSelection("studentWeakTopicIds", topic.id)} type="checkbox" />
@@ -713,12 +734,12 @@ export function AdminUserManagementPanel({
             </div>
           ) : null}
 
-          <div className="flex flex-wrap gap-3">
-            <Button disabled={isSaving || isRemoved} onClick={handleSave} type="button">
+          <div className="grid gap-3 sm:flex sm:flex-wrap">
+            <Button className="w-full sm:w-auto" disabled={isSaving || isRemoved} onClick={handleSave} type="button">
               <Save className="size-4" />
               {isSaving ? "Saving..." : "Save user changes"}
             </Button>
-            <Button disabled={isSaving} onClick={resetForm} type="button" variant="outline">
+            <Button className="w-full sm:w-auto" disabled={isSaving} onClick={resetForm} type="button" variant="outline">
               Reset changes
             </Button>
           </div>
@@ -748,7 +769,7 @@ export function AdminUserManagementPanel({
               <input checked={forcePasswordReset} className="accent-[var(--primary)]" onChange={(event) => setForcePasswordReset(event.target.checked)} type="checkbox" />
               Force password reset on next login
             </label>
-            <Button disabled={isPasswordMutating || isSelf || isRemoved || temporaryPassword.length === 0} onClick={handleResetPassword} type="button" variant="secondary">
+            <Button className="w-full sm:w-auto" disabled={isPasswordMutating || isSelf || isRemoved || temporaryPassword.length === 0} onClick={handleResetPassword} type="button" variant="secondary">
               {isPasswordMutating ? "Saving password..." : "Save temporary password"}
             </Button>
             {isSelf ? <p className="text-xs text-muted">For your own password, use the profile settings page.</p> : null}
@@ -767,16 +788,16 @@ export function AdminUserManagementPanel({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Button disabled={isLifecycleMutating || isRemoved || isSelf} onClick={() => handleStatus(UserStatus.BLOCKED)} type="button" variant="outline">
+              <Button className="w-full sm:w-auto" disabled={isLifecycleMutating || isRemoved || isSelf} onClick={() => handleStatus(UserStatus.BLOCKED)} type="button" variant="outline">
                 Block user
               </Button>
-              <Button disabled={isLifecycleMutating || isRemoved} onClick={() => handleStatus(UserStatus.ACTIVE)} type="button" variant="secondary">
+              <Button className="w-full sm:w-auto" disabled={isLifecycleMutating || isRemoved} onClick={() => handleStatus(UserStatus.ACTIVE)} type="button" variant="secondary">
                 Unblock / reactivate
               </Button>
-              <Button disabled={isLifecycleMutating || isRemoved || isSelf} onClick={() => handleStatus(UserStatus.DEACTIVATED)} type="button" variant="outline">
+              <Button className="w-full sm:w-auto" disabled={isLifecycleMutating || isRemoved || isSelf} onClick={() => handleStatus(UserStatus.DEACTIVATED)} type="button" variant="outline">
                 Deactivate
               </Button>
-              <Button disabled={isLifecycleMutating || isRemoved || isSelf} onClick={handleRemove} type="button" variant="danger">
+              <Button className="w-full sm:w-auto" disabled={isLifecycleMutating || isRemoved || isSelf} onClick={handleRemove} type="button" variant="danger">
                 <Trash2 className="size-4" />
                 Remove account
               </Button>

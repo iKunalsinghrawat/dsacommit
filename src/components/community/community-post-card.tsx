@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -32,13 +33,13 @@ type CommunityPostCardProps = {
     commentCount: number;
     isReported: boolean;
     createdAt: Date | string;
-    author: { name: string };
+    author: { name: string; slug: string };
     topic: { id: string; name: string } | null;
     company: { id: string; name: string } | null;
     comments: Array<{
       id: string;
       content: string;
-      author: { name: string };
+      author: { name: string; slug: string };
     }>;
   };
   viewer: {
@@ -181,7 +182,7 @@ export function CommunityPostCard({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="flex items-start gap-4">
             <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 font-semibold text-primary">
               {getInitials(displayPost.author.name)}
@@ -193,15 +194,16 @@ export function CommunityPostCard({
                 {displayPost.isReported ? <Badge variant="secondary">Reported</Badge> : null}
               </div>
               <CardDescription>
-                {displayPost.author.name} • {formatRelative(displayPost.createdAt)}
+                <Link className="font-medium text-foreground hover:text-primary" href={`/profile/${displayPost.author.slug}`}>{displayPost.author.name}</Link>{" "}| {formatRelative(displayPost.createdAt)}
               </CardDescription>
             </div>
           </div>
 
           {(canEdit || canDelete) && !isEditing ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
               {canEdit ? (
                 <Button
+                  className="w-full sm:w-auto"
                   onClick={() => {
                     resetEditState();
                     setIsEditing(true);
@@ -215,7 +217,7 @@ export function CommunityPostCard({
                 </Button>
               ) : null}
               {canDelete ? (
-                <Button disabled={isMutating} onClick={handleDelete} size="sm" type="button" variant="ghost">
+                <Button className="w-full sm:w-auto" disabled={isMutating} onClick={handleDelete} size="sm" type="button" variant="ghost">
                   <Trash2 className="size-4" />
                   Delete
                 </Button>
@@ -303,11 +305,11 @@ export function CommunityPostCard({
                 {actionError}
               </div>
             ) : null}
-            <div className="flex flex-wrap gap-3">
-              <Button disabled={isMutating} onClick={handleSave} type="button">
+            <div className="grid gap-3 sm:flex sm:flex-wrap">
+              <Button className="w-full sm:w-auto" disabled={isMutating} onClick={handleSave} type="button">
                 {isMutating ? "Saving..." : "Save changes"}
               </Button>
-              <Button disabled={isMutating} onClick={handleCancel} type="button" variant="outline">
+              <Button className="w-full sm:w-auto" disabled={isMutating} onClick={handleCancel} type="button" variant="outline">
                 Cancel
               </Button>
             </div>
@@ -335,7 +337,7 @@ export function CommunityPostCard({
         <div className="space-y-3">
           {displayPost.comments.map((comment) => (
             <div className="rounded-2xl border border-border bg-background/50 px-4 py-3" key={comment.id}>
-              <p className="text-sm font-medium">{comment.author.name}</p>
+              <Link className="text-sm font-medium hover:text-primary" href={`/profile/${comment.author.slug}`}>{comment.author.name}</Link>
               <p className="mt-2 text-sm leading-7 text-muted">{comment.content}</p>
             </div>
           ))}
@@ -352,3 +354,4 @@ export function CommunityPostCard({
     </Card>
   );
 }
+

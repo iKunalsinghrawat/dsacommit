@@ -66,12 +66,12 @@ export default async function ProblemDetailPage({
             <CardTitle>Tracking actions</CardTitle>
             <CardDescription>Mark progress, save for later, or add to revision.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
+          <CardContent className="grid gap-3 sm:flex sm:flex-wrap">
             <form action={updateProblemStatusAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
               <input name="status" type="hidden" value={SubmissionState.SOLVED} />
               <button
-                className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+                className="w-full rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground sm:w-auto"
                 type="submit"
               >
                 Mark solved
@@ -80,19 +80,19 @@ export default async function ProblemDetailPage({
             <form action={updateProblemStatusAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
               <input name="status" type="hidden" value={SubmissionState.ATTEMPTED} />
-              <button className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold" type="submit">
+              <button className="w-full rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold sm:w-auto" type="submit">
                 Mark attempted
               </button>
             </form>
             <form action={toggleBookmarkAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
-              <button className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold" type="submit">
+              <button className="w-full rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold sm:w-auto" type="submit">
                 {data.isBookmarked ? "Remove bookmark" : "Bookmark"}
               </button>
             </form>
             <form action={toggleRevisionAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
-              <button className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold" type="submit">
+              <button className="w-full rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold sm:w-auto" type="submit">
                 {data.inRevisionQueue ? "Remove from revision" : "Revision later"}
               </button>
             </form>

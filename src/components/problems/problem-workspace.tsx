@@ -649,8 +649,9 @@ export function ProblemWorkspace({
               ))}
             </Select>
           </div>
-          <div className="flex flex-wrap items-end gap-3 lg:justify-end">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-end lg:justify-end">
             <Button
+              className="w-full sm:w-auto"
               disabled={isBusy || !selectedLanguageSupportsExecution}
               onClick={() => execute("run")}
               type="button"
@@ -659,11 +660,16 @@ export function ProblemWorkspace({
               {isRunning ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
               Run code
             </Button>
-            <Button disabled={isBusy || !selectedLanguageSupportsExecution} onClick={() => execute("submit")} type="button">
+            <Button
+              className="w-full sm:w-auto"
+              disabled={isBusy || !selectedLanguageSupportsExecution}
+              onClick={() => execute("submit")}
+              type="button"
+            >
               {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               Submit code
             </Button>
-            <Button disabled={isBusy} onClick={() => void resetCode()} type="button" variant="outline">
+            <Button className="w-full sm:w-auto" disabled={isBusy} onClick={() => void resetCode()} type="button" variant="outline">
               <RotateCcw className="size-4" />
               Reset code
             </Button>
@@ -696,7 +702,7 @@ export function ProblemWorkspace({
 
         <CodeEditorSurface
           language={language}
-          minHeight={440}
+          minHeight={360}
           onChange={handleCodeChange}
           value={selectedCode}
         />

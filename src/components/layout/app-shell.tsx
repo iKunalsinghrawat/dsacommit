@@ -35,9 +35,9 @@ export function AppShell({
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-xl">
-        <div className="page-shell flex h-20 items-center justify-between gap-4">
+        <div className="page-shell flex min-h-20 flex-wrap items-center justify-between gap-3 py-3">
           <Logo />
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="hidden items-center gap-2 xl:flex">
             {navItems.map((item) => (
               <Link
                 className={cn(
@@ -51,14 +51,14 @@ export function AppShell({
               </Link>
             ))}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
             <ThemeToggle />
-            <div className="hidden items-center gap-3 rounded-full border border-border bg-card px-4 py-2 sm:flex">
+            <div className="hidden min-w-0 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 md:flex">
               <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
                 {getInitials(user.name)}
               </div>
-              <div className="text-left">
-                <p className="text-sm font-medium">{user.name}</p>
+              <div className="min-w-0 text-left">
+                <p className="truncate text-sm font-medium">{user.name}</p>
                 <p className="text-xs uppercase tracking-[0.22em] text-muted">{roleLabels[user.role]}</p>
               </div>
             </div>
@@ -71,7 +71,7 @@ export function AppShell({
         </div>
       </header>
 
-      <div className="page-shell grid gap-8 py-8 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="page-shell grid gap-6 py-6 lg:grid-cols-[250px_minmax(0,1fr)] lg:gap-8 lg:py-8">
         <aside className="hidden lg:block">
           <div className="glass-panel sticky top-28 p-5">
             <Badge>{roleLabels[user.role]}</Badge>
@@ -98,8 +98,8 @@ export function AppShell({
           </div>
         </aside>
 
-        <div className="space-y-8">
-          <div className="flex gap-2 overflow-x-auto lg:hidden">
+        <div className="min-w-0 space-y-6 lg:space-y-8">
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
             {navItems.map((item) => (
               <Link
                 className={cn(

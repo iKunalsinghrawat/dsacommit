@@ -1096,6 +1096,7 @@ export async function getUserChangeRequests(input: {
 export async function getAdminChangeRequests(input?: {
   entityType?: ChangeRequestEntityType | "ALL";
   status?: ChangeRequestStatus | "ALL";
+  limit?: number;
 }) {
   const [requests, pendingCount] = await Promise.all([
     prisma.changeRequest.findMany({
@@ -1105,6 +1106,7 @@ export async function getAdminChangeRequests(input?: {
         status: input?.status && input.status !== "ALL" ? input.status : undefined,
       },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: input?.limit,
       include: {
         requestedBy: {
           select: {

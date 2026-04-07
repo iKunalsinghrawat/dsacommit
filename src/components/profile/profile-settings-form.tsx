@@ -5,7 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { CareerTarget, Role, StudentLevel } from "@/generated/prisma/enums";
+import {
+  CareerTarget,
+  ProfileVisibility,
+  Role,
+  StudentLevel,
+} from "@/generated/prisma/enums";
 import {
   updateOwnPasswordAction,
   updateOwnProfileAction,
@@ -24,6 +29,7 @@ type ProfileData = {
   email: string;
   name: string;
   slug: string;
+  profileVisibility: ProfileVisibility;
   headline: string | null;
   bio: string | null;
   location: string | null;
@@ -85,6 +91,7 @@ export function ProfileSettingsForm({
   const [profileState, setProfileState] = useState({
     name: profile.name,
     slug: profile.slug,
+    profileVisibility: profile.profileVisibility,
     headline: profile.headline ?? "",
     bio: profile.bio ?? "",
     location: profile.location ?? "",
@@ -147,6 +154,7 @@ export function ProfileSettingsForm({
     const formData = new FormData();
     formData.set("name", profileState.name);
     formData.set("slug", profileState.slug);
+    formData.set("profileVisibility", profileState.profileVisibility);
     formData.set("headline", profileState.headline);
     formData.set("bio", profileState.bio);
     formData.set("location", profileState.location);
@@ -269,6 +277,22 @@ export function ProfileSettingsForm({
               <label className="text-sm font-medium">Location</label>
               <Input onChange={(event) => updateState("location", event.target.value)} value={profileState.location} />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Profile privacy</label>
+              <Select
+                onChange={(event) =>
+                  updateState("profileVisibility", event.target.value as ProfileVisibility)
+                }
+                value={profileState.profileVisibility}
+              >
+                <option value={ProfileVisibility.PUBLIC}>Public profile</option>
+                <option value={ProfileVisibility.PRIVATE}>Private profile</option>
+              </Select>
+              <p className="text-xs leading-6 text-muted">
+                Public profiles can be viewed by other signed-in users. Private profiles only stay visible to you and admins.
+              </p>
+              <FieldError fieldErrors={fieldErrors} name="profileVisibility" />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -277,7 +301,7 @@ export function ProfileSettingsForm({
             <FieldError fieldErrors={fieldErrors} name="bio" />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Avatar URL</label>
               <Input onChange={(event) => updateState("avatarUrl", event.target.value)} value={profileState.avatarUrl} />
@@ -327,21 +351,25 @@ export function ProfileSettingsForm({
               <div className="grid gap-4 xl:grid-cols-2">
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Target companies</p>
-                  {companies.map((company) => (
-                    <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm" key={company.id}>
-                      <input checked={profileState.studentTargetCompanyIds.includes(company.id)} className="accent-[var(--primary)]" onChange={() => toggleSelection("studentTargetCompanyIds", company.id)} type="checkbox" />
-                      {company.name}
-                    </label>
-                  ))}
+                  <div className="grid max-h-64 gap-3 overflow-y-auto pr-1">
+                    {companies.map((company) => (
+                      <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm" key={company.id}>
+                        <input checked={profileState.studentTargetCompanyIds.includes(company.id)} className="accent-[var(--primary)]" onChange={() => toggleSelection("studentTargetCompanyIds", company.id)} type="checkbox" />
+                        {company.name}
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="space-y-3">
                   <p className="text-sm font-medium">Weak topics</p>
-                  {topics.map((topic) => (
-                    <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm" key={topic.id}>
-                      <input checked={profileState.studentWeakTopicIds.includes(topic.id)} className="accent-[var(--primary)]" onChange={() => toggleSelection("studentWeakTopicIds", topic.id)} type="checkbox" />
-                      {topic.name}
-                    </label>
-                  ))}
+                  <div className="grid max-h-64 gap-3 overflow-y-auto pr-1">
+                    {topics.map((topic) => (
+                      <label className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-sm" key={topic.id}>
+                        <input checked={profileState.studentWeakTopicIds.includes(topic.id)} className="accent-[var(--primary)]" onChange={() => toggleSelection("studentWeakTopicIds", topic.id)} type="checkbox" />
+                        {topic.name}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
               {selectedCompanyNames.length ? (
@@ -415,7 +443,7 @@ export function ProfileSettingsForm({
             </div>
           ) : null}
 
-          <Button disabled={isSaving} onClick={handleSaveProfile} type="button">
+          <Button className="w-full sm:w-auto" disabled={isSaving} onClick={handleSaveProfile} type="button">
             <Save className="size-4" />
             {isSaving ? "Saving..." : "Save profile"}
           </Button>
@@ -450,7 +478,7 @@ export function ProfileSettingsForm({
               <FieldError fieldErrors={passwordErrors} name="confirmPassword" />
             </div>
           </div>
-          <Button disabled={isSavingPassword} onClick={handleSavePassword} type="button" variant="secondary">
+          <Button className="w-full sm:w-auto" disabled={isSavingPassword} onClick={handleSavePassword} type="button" variant="secondary">
             {isSavingPassword ? "Updating password..." : "Update password"}
           </Button>
         </CardContent>

@@ -99,12 +99,16 @@ function ComparisonPanel({
   );
 }
 
-export function AdminChangeRequestReviewCard({ request }: ReviewCardProps) {
+export function AdminChangeRequestReviewCard({
+  request,
+  canReview = false,
+}: ReviewCardProps & { canReview?: boolean }) {
   const router = useRouter();
   const [rejectionReason, setRejectionReason] = useState(request.rejectionReason ?? "");
   const [panelError, setPanelError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[] | undefined>>({});
   const [isPending, startTransition] = useTransition();
+  const isPendingRequest = String(request.status) === ChangeRequestStatus.PENDING;
 
   const proposedValue =
     request.operationType === ChangeRequestOperationType.DELETE
@@ -162,15 +166,43 @@ export function AdminChangeRequestReviewCard({ request }: ReviewCardProps) {
             </CardDescription>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm text-muted">
-            <p>Requester: {request.requestedBy.email}</p>
-            <p>Entity ID: {request.entityId ?? "Will be assigned on publish"}</p>
-            {request.reviewedAt && request.reviewedBy ? (
-              <p>
-                Reviewed by {request.reviewedBy.name} on{" "}
-                {formatDate(request.reviewedAt, "dd MMM yyyy, hh:mm a")}
-              </p>
-            ) : null}
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm text-muted">
+              <p>Requester: {request.requestedBy.email}</p>
+              <p>Entity ID: {request.entityId ?? "Will be assigned on publish"}</p>
+              {request.reviewedAt && request.reviewedBy ? (
+                <p>
+                  Reviewed by {request.reviewedBy.name} on{" "}
+                  {formatDate(request.reviewedAt, "dd MMM yyyy, hh:mm a")}
+                </p>
+              ) : null}
+            </div>
+
+            {canReview && isPendingRequest ? (
+              <div className="flex flex-wrap justify-end gap-3">
+                <Button
+                  disabled={isPending}
+                  onClick={() => handleReview(ChangeRequestStatus.APPROVED)}
+                  type="button"
+                >
+                  {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Approve
+                </Button>
+                <Button
+                  disabled={isPending}
+                  onClick={() => handleReview(ChangeRequestStatus.REJECTED)}
+                  type="button"
+                  variant="danger"
+                >
+                  {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Reject
+                </Button>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <ChangeRequestStatusBadge status={request.status} />
+              </div>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -213,7 +245,7 @@ export function AdminChangeRequestReviewCard({ request }: ReviewCardProps) {
           </div>
         ) : null}
 
-        {request.status === ChangeRequestStatus.PENDING ? (
+        {canReview && isPendingRequest ? (
           <div className="space-y-4 rounded-[24px] border border-border bg-background/40 p-5">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor={`rejection-reason-${request.id}`}>
@@ -258,7 +290,7 @@ export function AdminChangeRequestReviewCard({ request }: ReviewCardProps) {
           </div>
         ) : null}
 
-        {request.status !== ChangeRequestStatus.PENDING && request.rejectionReason ? (
+        {!isPendingRequest && request.rejectionReason ? (
           <div className="rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm text-muted">
             Final review note: {request.rejectionReason}
           </div>

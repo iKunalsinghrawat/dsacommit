@@ -21,6 +21,11 @@ enum UserStatus {
   DELETED
 }
 
+enum ProfileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum UserPortal {
   DASHBOARD
   ROADMAP
@@ -160,6 +165,7 @@ model User {
   slug             String                @unique
   role             Role
   status           UserStatus            @default(ACTIVE)
+  profileVisibility ProfileVisibility    @default(PUBLIC)
   accessGrants     UserPortal[]          @default([])
   avatarUrl        String?
   headline         String?

@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/generated/prisma/client";
 
-import { CareerTarget, Role, StudentLevel, UserPortal, UserStatus } from "@/generated/prisma/enums";
+import {
+  CareerTarget,
+  ProfileVisibility,
+  Role,
+  StudentLevel,
+  UserPortal,
+  UserStatus,
+} from "@/generated/prisma/enums";
 import { normalizeAccessGrants } from "@/lib/access-control";
 import { buildSessionPayload, requireRole, requireUser } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -114,13 +121,14 @@ async function syncStudentSelections(
   }
 }
 
-async function revalidateUserManagementPaths() {
+async function revalidateUserManagementPaths(extraProfileSlugs?: string[]) {
   revalidatePath("/admin");
   revalidatePath("/profile");
   revalidatePath("/dashboard");
   revalidatePath("/community");
   revalidatePath("/companies");
   revalidatePath("/mentors");
+  extraProfileSlugs?.forEach((slug) => revalidatePath(`/profile/${slug}`));
 }
 
 async function updateRoleSpecificProfiles(
@@ -264,6 +272,7 @@ async function saveManagedUser(
     email: string;
     slug: string;
     status: UserStatus;
+    profileVisibility: ProfileVisibility;
     accessGrants: UserPortal[];
     headline?: string;
     bio?: string;
@@ -314,6 +323,7 @@ async function saveManagedUser(
         slug: values.slug,
         role: values.role,
         status: values.status,
+        profileVisibility: values.profileVisibility,
         accessGrants: normalizeAccessGrants(values.role, values.accessGrants),
         headline: values.headline,
         bio: values.bio,
@@ -370,7 +380,7 @@ async function saveManagedUser(
     throw new Error("The updated user could not be loaded.");
   }
 
-  await revalidateUserManagementPaths();
+  await revalidateUserManagementPaths([currentUser.slug, values.slug]);
   return updatedUser;
 }
 
@@ -383,6 +393,7 @@ export async function updateManagedUserAction(formData: FormData): Promise<UserM
     slug: formData.get("slug"),
     role: formData.get("role"),
     status: formData.get("status"),
+    profileVisibility: formData.get("profileVisibility"),
     accessGrants: formData.getAll("accessGrants").map(String),
     headline: readOptionalFormValue(formData, "headline"),
     bio: readOptionalFormValue(formData, "bio"),
@@ -612,6 +623,7 @@ export async function updateOwnProfileAction(formData: FormData): Promise<UserMa
     slug: formData.get("slug"),
     role: user.role,
     status: user.status,
+    profileVisibility: formData.get("profileVisibility") ?? user.profileVisibility,
     accessGrants: user.accessGrants,
     headline: readOptionalFormValue(formData, "headline"),
     bio: readOptionalFormValue(formData, "bio"),
@@ -660,6 +672,7 @@ export async function updateOwnProfileAction(formData: FormData): Promise<UserMa
           slug: parsed.data.slug,
           headline: parsed.data.headline,
           bio: parsed.data.bio,
+          profileVisibility: parsed.data.profileVisibility,
           location: parsed.data.location,
           avatarUrl: parsed.data.avatarUrl,
           githubUrl: parsed.data.githubUrl,
@@ -691,7 +704,7 @@ export async function updateOwnProfileAction(formData: FormData): Promise<UserMa
       });
     });
 
-    await revalidateUserManagementPaths();
+    await revalidateUserManagementPaths([user.slug, parsed.data.slug]);
 
     return {
       ok: true,

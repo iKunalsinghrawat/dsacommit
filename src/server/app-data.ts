@@ -2,7 +2,12 @@ import "server-only";
 
 import { addDays, format, startOfDay, subDays } from "date-fns";
 
-import { ChangeRequestStatus, Role, SubmissionState } from "@/generated/prisma/enums";
+import {
+  ChangeRequestStatus,
+  ProfileVisibility,
+  Role,
+  SubmissionState,
+} from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards";
 
@@ -103,6 +108,54 @@ const appCommunityAuthorSelect = {
   role: true,
   headline: true,
   isVerified: true,
+} as const;
+
+const profileDataInclude = {
+  studentProfile: {
+    include: {
+      targetCompanies: {
+        include: {
+          company: {
+            select: appCompanySummarySelect,
+          },
+        },
+      },
+      weakTopics: {
+        include: {
+          topic: {
+            select: appTopicSummarySelect,
+          },
+        },
+      },
+    },
+  },
+  mentorProfile: {
+    include: {
+      company: {
+        select: appCompanySummarySelect,
+      },
+      mentorPosts: true,
+      followers: true,
+    },
+  },
+  ownedCompany: { include: { roles: true, contents: true } },
+  streak: true,
+  userBadges: { include: { badge: true } },
+  commitmentPosts: {
+    where: { isPublic: true },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+  },
+  bookmarks: {
+    take: 8,
+    select: {
+      id: true,
+      problemId: true,
+      problem: {
+        select: dashboardProblemSummarySelect,
+      },
+    },
+  },
 } as const;
 
 export async function getDashboardData(userId: string, role: Role) {
@@ -363,51 +416,47 @@ export async function getProfileData(userId: string) {
   try {
     return await prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        studentProfile: {
-          include: {
-            targetCompanies: {
-              include: {
-                company: {
-                  select: appCompanySummarySelect,
-                },
-              },
-            },
-            weakTopics: {
-              include: {
-                topic: {
-                  select: appTopicSummarySelect,
-                },
-              },
-            },
-          },
-        },
-        mentorProfile: {
-          include: {
-            company: {
-              select: appCompanySummarySelect,
-            },
-            mentorPosts: true,
-            followers: true,
-          },
-        },
-        ownedCompany: { include: { roles: true, contents: true } },
-        streak: true,
-        userBadges: { include: { badge: true } },
-        bookmarks: {
-          take: 8,
-          select: {
-            id: true,
-            problemId: true,
-            problem: {
-              select: dashboardProblemSummarySelect,
-            },
-          },
-        },
-      },
+      include: profileDataInclude,
     });
   } catch (error) {
     logServerError("getProfileData", error, { userId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return null;
+  }
+}
+
+export async function getProfileViewData(input: {
+  slug: string;
+  viewerId?: string;
+  viewerRole?: Role;
+}) {
+  try {
+    const profile = await prisma.user.findUnique({
+      where: { slug: input.slug },
+      include: profileDataInclude,
+    });
+
+    if (!profile) {
+      return null;
+    }
+
+    const isOwner = Boolean(input.viewerId && input.viewerId === profile.id);
+    const isAdmin = input.viewerRole === Role.ADMIN;
+    const canViewFullProfile =
+      profile.profileVisibility === ProfileVisibility.PUBLIC || isOwner || isAdmin;
+
+    return {
+      profile,
+      isOwner,
+      isAdmin,
+      canViewFullProfile,
+    };
+  } catch (error) {
+    logServerError("getProfileViewData", error, input);
 
     if (!isRecoverableRuntimeError(error)) {
       throw error;

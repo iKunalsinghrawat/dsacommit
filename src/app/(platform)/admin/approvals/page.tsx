@@ -124,7 +124,7 @@ export default async function AdminApprovalsPage({
         ) : null}
 
         {approvals.requests.map((request) => (
-          <AdminChangeRequestReviewCard key={request.id} request={request} />
+          <AdminChangeRequestReviewCard canReview key={request.id} request={request} />
         ))}
       </div>
     </div>

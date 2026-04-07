@@ -1,8 +1,9 @@
 import Link from "next/link";
 
-import { Role, UserPortal } from "@/generated/prisma/enums";
+import { ProfileVisibility, Role, UserPortal } from "@/generated/prisma/enums";
 import { ProfileSettingsForm } from "@/components/profile/profile-settings-form";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { requirePortalAccess, requireUser } from "@/lib/auth";
@@ -39,6 +40,16 @@ export default async function ProfilePage() {
         eyebrow="Profile"
         title={profile.name}
         description={profile.headline ?? "Update your DSA Commit profile, study metadata, and account security from one place."}
+        actions={
+          <div className="flex flex-wrap gap-3">
+            <Badge variant={profile.profileVisibility === ProfileVisibility.PUBLIC ? "success" : "outline"}>
+              {profile.profileVisibility === ProfileVisibility.PUBLIC ? "Public profile" : "Private profile"}
+            </Badge>
+            <Button asChild variant="secondary">
+              <Link href={`/profile/${profile.slug}`}>Preview public view</Link>
+            </Button>
+          </div>
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
