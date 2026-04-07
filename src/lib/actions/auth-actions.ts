@@ -2,10 +2,16 @@
 
 import { CareerTarget, Role, StudentLevel, UserStatus } from "@/generated/prisma/enums";
 import { getDefaultAccessGrants } from "@/lib/access-control";
+import { getAuthRuntimeSummary } from "@/lib/auth-config";
 import { buildSessionPayload, getHomeForRole } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
-import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards";
+import {
+  isMissingAuthConfigurationError,
+  isMissingDatabaseConfigurationError,
+  isRecoverableRuntimeError,
+  logServerError,
+} from "@/lib/runtime-guards";
 import { createSession, clearSession } from "@/lib/session";
 import { splitCsv, signInSchema, signUpSchema } from "@/lib/validators/auth";
 import { slugify } from "@/lib/utils";
@@ -138,7 +144,22 @@ export async function signInAction(
 
     redirect(getHomeForRole(user.role, user.accessGrants));
   } catch (error) {
-    logServerError("signInAction", error, { email: parsed.data.email.toLowerCase() });
+    logServerError("signInAction", error, {
+      email: parsed.data.email.toLowerCase(),
+      runtime: getAuthRuntimeSummary(),
+    });
+
+    if (isMissingAuthConfigurationError(error)) {
+      return {
+        error: "Sign in is unavailable until the authentication secret is configured on the server.",
+      };
+    }
+
+    if (isMissingDatabaseConfigurationError(error)) {
+      return {
+        error: "Sign in is unavailable until the database connection is configured on the server.",
+      };
+    }
 
     if (isRecoverableRuntimeError(error)) {
       return { error: "Sign in is temporarily unavailable. Check your runtime configuration and try again." };
@@ -298,7 +319,23 @@ export async function signUpAction(
 
     return { error: "Unsupported role selection." };
   } catch (error) {
-    logServerError("signUpAction", error, { email: parsed.data.email.toLowerCase(), role: parsed.data.role });
+    logServerError("signUpAction", error, {
+      email: parsed.data.email.toLowerCase(),
+      role: parsed.data.role,
+      runtime: getAuthRuntimeSummary(),
+    });
+
+    if (isMissingAuthConfigurationError(error)) {
+      return {
+        error: "Sign up is unavailable until the authentication secret is configured on the server.",
+      };
+    }
+
+    if (isMissingDatabaseConfigurationError(error)) {
+      return {
+        error: "Sign up is unavailable until the database connection is configured on the server.",
+      };
+    }
 
     if (isRecoverableRuntimeError(error)) {
       return { error: "Sign up is temporarily unavailable. Check your runtime configuration and try again." };

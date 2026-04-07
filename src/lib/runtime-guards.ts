@@ -15,7 +15,7 @@ export function isMissingDatabaseConfigurationError(error: unknown) {
 
 export function isMissingAuthConfigurationError(error: unknown) {
   const { message } = getRuntimeErrorDetails(error);
-  return /AUTH_SECRET is not configured/i.test(message);
+  return /AUTH_SECRET|NEXTAUTH_SECRET|Authentication secret is not configured/i.test(message);
 }
 
 export function isPrismaCompatibilityError(error: unknown) {

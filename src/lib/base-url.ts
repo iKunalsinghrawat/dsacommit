@@ -14,6 +14,8 @@ function normalizeBaseUrl(value?: string | null) {
 
 export function getBaseUrl() {
   return (
+    normalizeBaseUrl(process.env.AUTH_URL) ??
+    normalizeBaseUrl(process.env.NEXTAUTH_URL) ??
     normalizeBaseUrl(process.env.NEXT_PUBLIC_APP_URL) ??
     normalizeBaseUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL) ??
     normalizeBaseUrl(process.env.URL) ??

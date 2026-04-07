@@ -3,19 +3,19 @@ import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 import { Role, UserPortal, UserStatus } from "./src/generated/prisma/enums";
+import { requireAuthSecret } from "./src/lib/auth-config";
 import { getHomeForAccess, hasPortalAccess, navigationItems } from "./src/lib/access-control";
 import { AUTH_COOKIE_NAME, PROTECTED_ROUTE_PREFIXES } from "./src/lib/constants";
 
 async function getSessionFromRequest(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  const secret = process.env.AUTH_SECRET;
 
-  if (!token || !secret) {
+  if (!token) {
     return null;
   }
 
   try {
-    const verified = await jwtVerify(token, new TextEncoder().encode(secret));
+    const verified = await jwtVerify(token, requireAuthSecret());
     return verified.payload as {
       userId: string;
       name?: string;

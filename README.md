@@ -230,12 +230,16 @@ Important: Vercel documents that the Hobby plan is for non-commercial personal u
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
+- `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
+- `AUTH_URL` (optional canonical runtime URL)
+- `NEXTAUTH_URL` (optional legacy URL alias)
 - `SEED_DEFAULT_PASSWORD`
 - `NEXT_PUBLIC_APP_URL`
 
-5. Set `NEXT_PUBLIC_APP_URL` to your production domain if you already know it. If not, you can leave it blank for the first deploy because the app now falls back to Vercel system URLs automatically.
-6. Deploy the app.
-7. Run database setup once against production:
+5. Set either `AUTH_SECRET` or `NEXTAUTH_SECRET`. The app accepts both, but `AUTH_SECRET` is the primary name.
+6. Set either `AUTH_URL`, `NEXTAUTH_URL`, or `NEXT_PUBLIC_APP_URL` to your production domain if you already know it. If not, you can leave them blank for the first deploy because the app now falls back to Vercel system URLs automatically.
+7. Deploy the app.
+8. Run database setup once against production:
 
 ```bash
 npx prisma migrate deploy
@@ -262,11 +266,15 @@ Use this when you want a no-cost public deployment without the Vercel Hobby non-
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
+- `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
+- `AUTH_URL` (optional canonical runtime URL)
+- `NEXTAUTH_URL` (optional legacy URL alias)
 - `SEED_DEFAULT_PASSWORD`
 - `NEXT_PUBLIC_APP_URL`
 
-6. Deploy the site.
-7. Run database setup once against production:
+6. Set either `AUTH_SECRET` or `NEXTAUTH_SECRET`. The app accepts both, but `AUTH_SECRET` is the primary name.
+7. Deploy the site.
+8. Run database setup once against production:
 
 ```bash
 npx prisma migrate deploy

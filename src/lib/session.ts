@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Role, UserPortal, UserStatus } from "@/generated/prisma/enums";
+import { requireAuthSecret } from "@/lib/auth-config";
 import { normalizeAccessGrants } from "@/lib/access-control";
 import { AUTH_COOKIE_NAME, SESSION_DURATION_DAYS } from "@/lib/constants";
 import { isMissingAuthConfigurationError, logServerError } from "@/lib/runtime-guards";
@@ -18,16 +19,6 @@ export type SessionPayload = {
   sessionVersion: number;
 };
 
-function getSecret() {
-  const secret = process.env.AUTH_SECRET;
-
-  if (!secret) {
-    throw new Error("AUTH_SECRET is not configured.");
-  }
-
-  return new TextEncoder().encode(secret);
-}
-
 export async function createSession(payload: SessionPayload) {
   try {
     const expiresAt = new Date();
@@ -37,7 +28,7 @@ export async function createSession(payload: SessionPayload) {
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime(`${SESSION_DURATION_DAYS}d`)
-      .sign(getSecret());
+      .sign(requireAuthSecret());
 
     const cookieStore = await cookies();
 
@@ -68,7 +59,7 @@ export async function getSession() {
   }
 
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    const { payload } = await jwtVerify(token, requireAuthSecret());
     const session = payload as unknown as Partial<SessionPayload>;
 
     if (!session.userId || !session.name || !session.email || !session.role) {
