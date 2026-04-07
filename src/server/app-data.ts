@@ -51,6 +51,60 @@ function buildHeatmap(checkins: Array<{ date: Date; minutesCommitted: number; so
   });
 }
 
+const dashboardProblemSummarySelect = {
+  id: true,
+  title: true,
+  slug: true,
+  difficulty: true,
+  estimatedMinutes: true,
+  topic: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
+} as const;
+
+const dashboardProblemWithCompanyTagsSelect = {
+  ...dashboardProblemSummarySelect,
+  companyTags: {
+    select: {
+      id: true,
+      companyId: true,
+      company: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+  },
+} as const;
+
+const appTopicSummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
+const appCompanySummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
+const appCommunityAuthorSelect = {
+  id: true,
+  name: true,
+  email: true,
+  slug: true,
+  role: true,
+  headline: true,
+  isVerified: true,
+} as const;
+
 export async function getDashboardData(userId: string, role: Role) {
   try {
     if (role === Role.MENTOR) {
@@ -129,7 +183,17 @@ export async function getDashboardData(userId: string, role: Role) {
         prisma.problem.count(),
         prisma.communityPost.findMany({
           where: { isReported: true },
-          include: { author: true, company: true, topic: true },
+          include: {
+            author: {
+              select: appCommunityAuthorSelect,
+            },
+            company: {
+              select: appCompanySummarySelect,
+            },
+            topic: {
+              select: appTopicSummarySelect,
+            },
+          },
         }),
       ]);
 
@@ -143,8 +207,20 @@ export async function getDashboardData(userId: string, role: Role) {
           include: {
             studentProfile: {
               include: {
-                targetCompanies: { include: { company: true } },
-                weakTopics: { include: { topic: true } },
+                targetCompanies: {
+                  include: {
+                    company: {
+                      select: appCompanySummarySelect,
+                    },
+                  },
+                },
+                weakTopics: {
+                  include: {
+                    topic: {
+                      select: appTopicSummarySelect,
+                    },
+                  },
+                },
               },
             },
             streak: true,
@@ -153,13 +229,26 @@ export async function getDashboardData(userId: string, role: Role) {
         }),
         prisma.bookmark.findMany({
           where: { userId },
-          include: { problem: { include: { topic: true } } },
+          select: {
+            id: true,
+            problemId: true,
+            problem: {
+              select: dashboardProblemSummarySelect,
+            },
+          },
           take: 8,
           orderBy: { createdAt: "desc" },
         }),
         prisma.revisionQueue.findMany({
           where: { userId },
-          include: { problem: { include: { topic: true } } },
+          select: {
+            id: true,
+            problemId: true,
+            reason: true,
+            problem: {
+              select: dashboardProblemSummarySelect,
+            },
+          },
           take: 8,
           orderBy: { remindOn: "asc" },
         }),
@@ -177,17 +266,21 @@ export async function getDashboardData(userId: string, role: Role) {
         }),
         prisma.progress.findMany({
           where: { userId },
-          include: { topic: true },
+          include: {
+            topic: {
+              select: appTopicSummarySelect,
+            },
+          },
           orderBy: { completionPercentage: "asc" },
         }),
         prisma.submissionStatus.findMany({
           where: { userId },
-          include: {
+          select: {
+            id: true,
+            problemId: true,
+            status: true,
             problem: {
-              include: {
-                topic: true,
-                companyTags: { include: { company: true } },
-              },
+              select: dashboardProblemWithCompanyTagsSelect,
             },
           },
         }),
@@ -210,10 +303,7 @@ export async function getDashboardData(userId: string, role: Role) {
         },
         id: { notIn: [...solvedProblemIds] },
       },
-      include: {
-        topic: true,
-        companyTags: { include: { company: true } },
-      },
+      select: dashboardProblemWithCompanyTagsSelect,
       orderBy: [{ frequency: "desc" }, { difficulty: "asc" }],
       take: 6,
     });
@@ -276,15 +366,44 @@ export async function getProfileData(userId: string) {
       include: {
         studentProfile: {
           include: {
-            targetCompanies: { include: { company: true } },
-            weakTopics: { include: { topic: true } },
+            targetCompanies: {
+              include: {
+                company: {
+                  select: appCompanySummarySelect,
+                },
+              },
+            },
+            weakTopics: {
+              include: {
+                topic: {
+                  select: appTopicSummarySelect,
+                },
+              },
+            },
           },
         },
-        mentorProfile: { include: { company: true, mentorPosts: true, followers: true } },
+        mentorProfile: {
+          include: {
+            company: {
+              select: appCompanySummarySelect,
+            },
+            mentorPosts: true,
+            followers: true,
+          },
+        },
         ownedCompany: { include: { roles: true, contents: true } },
         streak: true,
         userBadges: { include: { badge: true } },
-        bookmarks: { include: { problem: { include: { topic: true } } }, take: 8 },
+        bookmarks: {
+          take: 8,
+          select: {
+            id: true,
+            problemId: true,
+            problem: {
+              select: dashboardProblemSummarySelect,
+            },
+          },
+        },
       },
     });
   } catch (error) {
@@ -307,7 +426,17 @@ export async function getCompanyPortalData(userId: string) {
           include: {
             roles: true,
             contents: { orderBy: { createdAt: "desc" } },
-            problemTags: { include: { problem: { include: { topic: true } } } },
+            problemTags: {
+              select: {
+                id: true,
+                frequency: true,
+                role: true,
+                notes: true,
+                problem: {
+                  select: dashboardProblemSummarySelect,
+                },
+              },
+            },
           },
         },
       },
@@ -364,12 +493,31 @@ export async function getAdminPanelData() {
         take: 8,
       }),
       prisma.companyProfile.findMany({ take: 8 }),
-      prisma.problem.findMany({ include: { topic: true }, take: 10 }),
-      prisma.topic.findMany({ orderBy: { sortOrder: "asc" } }),
+      prisma.problem.findMany({ select: dashboardProblemSummarySelect, take: 10 }),
+      prisma.topic.findMany({
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          level: true,
+          sortOrder: true,
+        },
+      }),
       prisma.badge.findMany({ orderBy: { pointValue: "desc" } }),
       prisma.communityPost.findMany({
         where: { isReported: true },
-        include: { author: true, topic: true, company: true },
+        include: {
+          author: {
+            select: appCommunityAuthorSelect,
+          },
+          topic: {
+            select: appTopicSummarySelect,
+          },
+          company: {
+            select: appCompanySummarySelect,
+          },
+        },
       }),
       prisma.changeRequest
         .count({

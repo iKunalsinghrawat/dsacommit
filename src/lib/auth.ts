@@ -7,6 +7,18 @@ import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards"
 import { clearSession, getSession, type SessionPayload } from "@/lib/session";
 import { redirect } from "next/navigation";
 
+const authTopicSummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
+const authCompanySummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
 export function buildSessionPayload(user: {
   id: string;
   email: string;
@@ -44,18 +56,34 @@ export async function getCurrentUser() {
       include: {
         studentProfile: {
           include: {
-            targetCompanies: { include: { company: true } },
-            weakTopics: { include: { topic: true } },
+            targetCompanies: {
+              include: {
+                company: {
+                  select: authCompanySummarySelect,
+                },
+              },
+            },
+            weakTopics: {
+              include: {
+                topic: {
+                  select: authTopicSummarySelect,
+                },
+              },
+            },
             mentorFollows: true,
           },
         },
         mentorProfile: {
           include: {
-            company: true,
+            company: {
+              select: authCompanySummarySelect,
+            },
             followers: true,
           },
         },
-        ownedCompany: true,
+        ownedCompany: {
+          select: authCompanySummarySelect,
+        },
         streak: true,
         userBadges: { include: { badge: true } },
       },

@@ -11,6 +11,20 @@ type UserManagementFilters = {
   userId?: string;
 };
 
+const managementTopicSummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+  level: true,
+  sortOrder: true,
+} as const;
+
+const managementCompanySummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
 export async function getAdminUserManagementData(filters: UserManagementFilters) {
   const search = filters.search?.trim();
 
@@ -74,7 +88,10 @@ export async function getAdminUserManagementData(filters: UserManagementFilters)
         prisma.user.count({ where: { status: UserStatus.BLOCKED } }),
         prisma.user.count({ where: { status: UserStatus.DEACTIVATED } }),
         prisma.user.count({ where: { status: UserStatus.DELETED } }),
-        prisma.topic.findMany({ orderBy: [{ level: "asc" }, { sortOrder: "asc" }] }),
+        prisma.topic.findMany({
+          orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
+          select: managementTopicSummarySelect,
+        }),
         prisma.companyProfile.findMany({ orderBy: { name: "asc" } }),
       ]);
 
@@ -89,16 +106,37 @@ export async function getAdminUserManagementData(filters: UserManagementFilters)
           include: {
             studentProfile: {
               include: {
-                targetCompanies: { include: { company: true } },
-                weakTopics: { include: { topic: true } },
+                targetCompanies: {
+                  include: {
+                    company: {
+                      select: managementCompanySummarySelect,
+                    },
+                  },
+                },
+                weakTopics: {
+                  include: {
+                    topic: {
+                      select: managementTopicSummarySelect,
+                    },
+                  },
+                },
               },
             },
             mentorProfile: {
               include: {
-                company: true,
+                company: {
+                  select: managementCompanySummarySelect,
+                },
               },
             },
-            ownedCompany: true,
+            ownedCompany: {
+              select: {
+                ...managementCompanySummarySelect,
+                overview: true,
+                industry: true,
+                website: true,
+              },
+            },
           },
         })
       : null;

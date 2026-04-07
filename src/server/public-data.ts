@@ -45,6 +45,52 @@ const problemDetailBaseSelect = {
   },
 } as const;
 
+const topicSummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+  level: true,
+  sortOrder: true,
+  conceptSummary: true,
+  notes: true,
+  difficultyProgression: true,
+  revisionChecklist: true,
+  quiz: true,
+  estimatedHours: true,
+  icon: true,
+  accentColor: true,
+} as const;
+
+const problemCatalogSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  difficulty: true,
+  problemStatement: true,
+  frequency: true,
+  estimatedMinutes: true,
+  topic: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  },
+  companyTags: {
+    select: {
+      id: true,
+      frequency: true,
+      company: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+  },
+} as const;
+
 const problemWorkspaceSelect = {
   codeExecutionEnabled: true,
   starterCode: true,
@@ -61,6 +107,28 @@ const problemWorkspaceSelect = {
       sortOrder: true,
     },
   },
+} as const;
+
+const publicTopicSummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
+const publicCompanySummarySelect = {
+  id: true,
+  name: true,
+  slug: true,
+} as const;
+
+const publicUserSummarySelect = {
+  id: true,
+  name: true,
+  email: true,
+  slug: true,
+  role: true,
+  headline: true,
+  isVerified: true,
 } as const;
 
 function getPrismaErrorDetails(error: unknown) {
@@ -112,7 +180,8 @@ function buildRoadmapGroups<T extends { level: "BEGINNER" | "INTERMEDIATE" | "AD
 
 async function getFallbackRoadmapData() {
   const topics = await prisma.topic.findMany({
-    include: {
+    select: {
+      ...topicSummarySelect,
       problems: {
         select: { id: true },
       },
@@ -372,9 +441,13 @@ export async function getTopicsList() {
   try {
     return await prisma.topic.findMany({
       where: { isArchived: false },
-      include: {
+      select: {
+        ...topicSummarySelect,
         problems: {
           where: { isArchived: false },
+          select: {
+            id: true,
+          },
         },
       },
       orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
@@ -391,8 +464,13 @@ export async function getTopicsList() {
     }
 
     return prisma.topic.findMany({
-      include: {
-        problems: true,
+      select: {
+        ...topicSummarySelect,
+        problems: {
+          select: {
+            id: true,
+          },
+        },
       },
       orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
     });
@@ -403,11 +481,27 @@ export async function getTopicBySlug(slug: string) {
   try {
     return await prisma.topic.findFirst({
       where: { slug, isArchived: false },
-      include: {
+      select: {
+        ...topicSummarySelect,
         problems: {
           where: { isArchived: false },
-          include: {
-            companyTags: { include: { company: true } },
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            difficulty: true,
+            companyTags: {
+              select: {
+                id: true,
+                company: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: [{ difficulty: "asc" }, { frequency: "desc" }],
         },
@@ -426,10 +520,26 @@ export async function getTopicBySlug(slug: string) {
 
     return prisma.topic.findUnique({
       where: { slug },
-      include: {
+      select: {
+        ...topicSummarySelect,
         problems: {
-          include: {
-            companyTags: { include: { company: true } },
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            difficulty: true,
+            companyTags: {
+              select: {
+                id: true,
+                company: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: [{ difficulty: "asc" }, { frequency: "desc" }],
         },
@@ -465,14 +575,7 @@ export async function getProblemsList(filters?: {
         ...baseWhere,
         isArchived: false,
       },
-      include: {
-        topic: true,
-        companyTags: {
-          include: {
-            company: true,
-          },
-        },
-      },
+      select: problemCatalogSelect,
       orderBy: [{ frequency: "desc" }, { difficulty: "asc" }, { title: "asc" }],
     });
   } catch (error) {
@@ -488,14 +591,7 @@ export async function getProblemsList(filters?: {
 
     return prisma.problem.findMany({
       where: baseWhere,
-      include: {
-        topic: true,
-        companyTags: {
-          include: {
-            company: true,
-          },
-        },
-      },
+      select: problemCatalogSelect,
       orderBy: [{ frequency: "desc" }, { difficulty: "asc" }, { title: "asc" }],
     });
   }
@@ -597,7 +693,21 @@ export async function getCompaniesList() {
           },
           include: { user: true },
         },
-        problemTags: { include: { problem: true } },
+        problemTags: {
+          select: {
+            id: true,
+            frequency: true,
+            role: true,
+            notes: true,
+            problem: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+              },
+            },
+          },
+        },
         roles: true,
         contents: true,
       },
@@ -630,10 +740,24 @@ export async function getCompanyBySlug(slug: string) {
           },
         },
         problemTags: {
-          include: {
+          select: {
+            id: true,
+            frequency: true,
+            role: true,
+            notes: true,
             problem: {
-              include: {
-                topic: true,
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                difficulty: true,
+                topic: {
+                  select: {
+                    id: true,
+                    name: true,
+                    slug: true,
+                  },
+                },
               },
             },
           },
@@ -731,9 +855,15 @@ export async function getMentorBySlug(slug: string, studentId?: string) {
               in: mentor.mentorPosts.flatMap((post) => post.recommendedProblemSlugs),
             },
           },
-          include: {
-            topic: true,
-            companyTags: { include: { company: true } },
+          select: {
+            ...problemCatalogSelect,
+            topic: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+              },
+            },
           },
         })
       : [];
@@ -758,12 +888,20 @@ export async function getCommunityFeed() {
   try {
     return await prisma.communityPost.findMany({
       include: {
-        author: true,
-        topic: true,
-        company: true,
+        author: {
+          select: publicUserSummarySelect,
+        },
+        topic: {
+          select: publicTopicSummarySelect,
+        },
+        company: {
+          select: publicCompanySummarySelect,
+        },
         comments: {
           include: {
-            author: true,
+            author: {
+              select: publicUserSummarySelect,
+            },
           },
           orderBy: { createdAt: "asc" },
         },
@@ -785,15 +923,37 @@ export async function getCatalogMeta() {
   try {
     const [topics, companies] = await Promise.all([
       prisma.topic
-        .findMany({ where: { isArchived: false }, orderBy: { sortOrder: "asc" } })
+        .findMany({
+          where: { isArchived: false },
+          orderBy: { sortOrder: "asc" },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        })
         .catch((error) => {
           if (!isApprovalWorkflowSchemaError(error)) {
             throw error;
           }
 
-          return prisma.topic.findMany({ orderBy: { sortOrder: "asc" } });
+          return prisma.topic.findMany({
+            orderBy: { sortOrder: "asc" },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          });
         }),
-      prisma.companyProfile.findMany({ orderBy: { name: "asc" } }),
+      prisma.companyProfile.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      }),
     ]);
 
     return { topics, companies };
