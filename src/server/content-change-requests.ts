@@ -2,6 +2,7 @@ import "server-only";
 
 import type { z } from "zod";
 
+import { Prisma } from "@/generated/prisma/client";
 import {
   ChangeRequestEntityType,
   ChangeRequestOperationType,
@@ -44,6 +45,10 @@ type ProblemSnapshot = ProblemChangeRequestData & {
 function normalizeOptionalString(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 async function ensureTopicExists(tx: PrismaTransaction, topicId: string) {
@@ -103,8 +108,8 @@ function sortCompanyTags(
   companyTags: Array<{
     companyId: string;
     frequency: number;
-    role?: string | null;
-    notes?: string | null;
+    role: string | undefined;
+    notes: string | undefined;
   }>,
 ) {
   return [...companyTags].sort((left, right) => {
@@ -118,10 +123,10 @@ function sortCompanyTags(
 
 function sortTestCases(
   testCases: Array<{
-    label?: string | null;
+    label: string | undefined;
     input: string;
     expectedOutput: string;
-    isHidden?: boolean;
+    isHidden: boolean;
     sortOrder: number;
   }>,
 ) {
@@ -403,8 +408,8 @@ async function createChangeRequest(input: {
       entityId: input.entityId,
       requestedById: input.requestedById,
       summary: input.summary,
-      requestedData: input.requestedData,
-      currentData: input.currentData ?? null,
+      requestedData: toJsonValue(input.requestedData),
+      ...(input.currentData !== undefined ? { currentData: toJsonValue(input.currentData) } : {}),
     },
   });
 }

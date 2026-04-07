@@ -33,10 +33,18 @@ type ActionResult = {
 };
 
 function buildFieldErrorResponse(error: ZodError, fallback: string): ActionResult {
+  const fieldErrors = error.issues.reduce<Record<string, string[] | undefined>>((accumulator, issue) => {
+    const path = issue.path.map(String).join(".");
+    const field = path || "form";
+    const currentMessages = accumulator[field] ?? [];
+    accumulator[field] = [...currentMessages, issue.message];
+    return accumulator;
+  }, {});
+
   return {
     ok: false,
     error: fallback,
-    fieldErrors: error.flatten().fieldErrors,
+    fieldErrors,
   };
 }
 

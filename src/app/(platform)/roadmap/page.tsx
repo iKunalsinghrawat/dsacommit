@@ -28,7 +28,7 @@ export default async function RoadmapPage() {
       />
 
       <div className="grid gap-6">
-        {Object.entries(roadmap).map(([level, topics]) => (
+        {Object.entries(roadmap).map(([level, items]) => (
           <Card key={level}>
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -42,21 +42,36 @@ export default async function RoadmapPage() {
                         : "Move into interview-heavy advanced decision patterns."}
                   </CardTitle>
                 </div>
-                <CardDescription>{topics.length} topics in this stage</CardDescription>
+                <CardDescription>{items.length} roadmap items in this stage</CardDescription>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4 lg:grid-cols-2">
-              {topics.map((topic) => (
-                <Link href={`/topics/${topic.slug}`} key={topic.id}>
+              {items.map((item) => {
+                const content = (
                   <div className="rounded-[28px] border border-border bg-background/50 p-5 hover:border-primary/30">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-lg font-semibold">{topic.name}</p>
-                      <Badge variant="outline">{topic.problems.length} problems</Badge>
+                      <div>
+                        <p className="text-lg font-semibold">{item.title}</p>
+                        {item.topic ? (
+                          <p className="text-xs uppercase tracking-[0.24em] text-muted">{item.topic.name}</p>
+                        ) : null}
+                      </div>
+                      <Badge variant="outline">{item.topic?.problems.length ?? 0} problems</Badge>
                     </div>
-                    <p className="text-sm leading-7 text-muted">{topic.conceptSummary}</p>
+                    <p className="text-sm leading-7 text-muted">{item.summary}</p>
                   </div>
-                </Link>
-              ))}
+                );
+
+                if (!item.topic?.slug) {
+                  return <div key={item.id}>{content}</div>;
+                }
+
+                return (
+                  <Link href={`/topics/${item.topic.slug}`} key={item.id}>
+                    {content}
+                  </Link>
+                );
+              })}
             </CardContent>
           </Card>
         ))}

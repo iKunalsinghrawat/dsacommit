@@ -8,7 +8,7 @@ import { CodeLanguage, Difficulty } from "@/generated/prisma/enums";
 
 const prisma = {
   problem: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
   },
   submissionStatus: {
@@ -89,7 +89,7 @@ describe("getProblemById", () => {
   });
 
   it("falls back to a non-workspace problem payload when workspace schema tables are missing", async () => {
-    prisma.problem.findUnique
+    prisma.problem.findFirst
       .mockRejectedValueOnce({
         code: "P2021",
         message: 'The table "public.ProblemTestCase" does not exist in the current database.',
@@ -110,7 +110,7 @@ describe("getProblemById", () => {
   });
 
   it("keeps the page load working when draft or submission tables are missing", async () => {
-    prisma.problem.findUnique.mockResolvedValueOnce({
+    prisma.problem.findFirst.mockResolvedValueOnce({
       ...baseProblem,
       codeExecutionEnabled: true,
       starterCode: 'export function solve(input: string): string {\n  return "";\n}\n',

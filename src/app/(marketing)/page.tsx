@@ -183,14 +183,21 @@ export default async function HomePage() {
             <Card key={level}>
               <CardHeader>
                 <CardTitle>{level.toLowerCase().replace(/^\w/, (char) => char.toUpperCase())}</CardTitle>
-                <CardDescription>{topics.length} focused topics with notes, quizzes, and revision checklists.</CardDescription>
+              <CardDescription>
+                {topics.length} focused roadmap checkpoints with notes, quizzes, and revision checklists.
+              </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {topics.map((topic) => (
-                  <div className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-3" key={topic.id}>
-                    <span className="font-medium">{topic.name}</span>
+                {topics.map((item) => (
+                  <div className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-3" key={item.id}>
+                    <div>
+                      <p className="font-medium">{item.title}</p>
+                      {item.topic ? (
+                        <p className="text-xs uppercase tracking-[0.24em] text-muted">{item.topic.name}</p>
+                      ) : null}
+                    </div>
                     <span className="text-xs uppercase tracking-[0.24em] text-muted">
-                      {topic.problems.length} problems
+                      {item.topic?.problems.length ?? 0} problems
                     </span>
                   </div>
                 ))}
