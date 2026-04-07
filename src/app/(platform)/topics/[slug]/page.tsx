@@ -1,11 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { UserPortal } from "@/generated/prisma/enums";
+import {
+  ChangeRequestEntityType,
+  ChangeRequestOperationType,
+  UserPortal,
+} from "@/generated/prisma/enums";
+import { ChangeRequestHistoryCard } from "@/components/approvals/change-request-history-card";
+import { TopicRequestSection } from "@/components/approvals/topic-request-section";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { requirePortalAccess } from "@/lib/auth";
+import { getUserChangeRequests } from "@/server/content-change-requests";
 import { getTopicBySlug } from "@/server/public-data";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +23,19 @@ export default async function TopicDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  await requirePortalAccess(UserPortal.TOPICS);
+  const user = await requirePortalAccess(UserPortal.TOPICS);
   const topic = await getTopicBySlug(slug);
 
   if (!topic) {
     notFound();
   }
+
+  const requests = await getUserChangeRequests({
+    userId: user.id,
+    entityTypes: [ChangeRequestEntityType.TOPIC],
+    entityId: topic.id,
+    limit: 6,
+  });
 
   const companyTags = Array.from(
     new Set(
@@ -129,6 +143,33 @@ export default async function TopicDetailPage({
             ))}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <TopicRequestSection
+          availableModes={[ChangeRequestOperationType.UPDATE, ChangeRequestOperationType.DELETE]}
+          currentTopic={{
+            id: topic.id,
+            name: topic.name,
+            slug: topic.slug,
+            level: topic.level,
+            sortOrder: topic.sortOrder,
+            conceptSummary: topic.conceptSummary,
+            notes: topic.notes,
+            difficultyProgression: topic.difficultyProgression,
+            revisionChecklist: topic.revisionChecklist,
+            quiz: topic.quiz as Array<{ question: string; answer: string }>,
+            estimatedHours: topic.estimatedHours,
+            icon: topic.icon,
+            accentColor: topic.accentColor,
+          }}
+        />
+        <ChangeRequestHistoryCard
+          description="Requests for this live topic. The public version stays unchanged until an admin approves the update."
+          emptyLabel="No topic-specific change requests have been submitted for this topic yet."
+          requests={requests}
+          title="Topic request status"
+        />
       </div>
     </div>
   );

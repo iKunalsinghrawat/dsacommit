@@ -353,6 +353,18 @@ async function getProblemSnapshot(tx: PrismaTransaction, id: string) {
   return problem ? serializeProblemRecord(problem) : null;
 }
 
+export async function getTopicChangeRequestRecord(id: string) {
+  return getTopicSnapshot(prisma as unknown as PrismaTransaction, id);
+}
+
+export async function getRoadmapItemChangeRequestRecord(id: string) {
+  return getRoadmapItemSnapshot(prisma as unknown as PrismaTransaction, id);
+}
+
+export async function getProblemChangeRequestRecord(id: string) {
+  return getProblemSnapshot(prisma as unknown as PrismaTransaction, id);
+}
+
 export async function getLiveEntitySnapshot(
   entityType: ChangeRequestEntityType,
   entityId: string,
@@ -971,21 +983,24 @@ export async function approveChangeRequest(input: {
       throw new Error("Only pending change requests can be approved.");
     }
 
+    let appliedEntity: { id?: string } | null = null;
+
     if (request.entityType === ChangeRequestEntityType.TOPIC) {
-      await applyTopicChange(tx, request);
+      appliedEntity = await applyTopicChange(tx, request);
     }
 
     if (request.entityType === ChangeRequestEntityType.ROADMAP_ITEM) {
-      await applyRoadmapItemChange(tx, request);
+      appliedEntity = await applyRoadmapItemChange(tx, request);
     }
 
     if (request.entityType === ChangeRequestEntityType.PROBLEM) {
-      await applyProblemChange(tx, request);
+      appliedEntity = await applyProblemChange(tx, request);
     }
 
     await tx.changeRequest.update({
       where: { id: input.requestId },
       data: {
+        entityId: request.entityId ?? appliedEntity?.id ?? null,
         status: ChangeRequestStatus.APPROVED,
         reviewedById: input.reviewerId,
         reviewedAt: new Date(),
@@ -1056,12 +1071,14 @@ export async function rejectChangeRequest(input: {
 export async function getUserChangeRequests(input: {
   userId: string;
   entityTypes?: ChangeRequestEntityType[];
+  entityId?: string;
   limit?: number;
 }) {
   return prisma.changeRequest.findMany({
     where: {
       requestedById: input.userId,
       entityType: input.entityTypes?.length ? { in: input.entityTypes } : undefined,
+      entityId: input.entityId,
     },
     orderBy: { createdAt: "desc" },
     take: input.limit ?? 8,

@@ -22,6 +22,7 @@ import {
   ChangeRequestEntityType,
   ChangeRequestOperationType,
   ChangeRequestStatus,
+  Role,
   UserPortal,
 } from "@/generated/prisma/enums";
 
@@ -336,7 +337,7 @@ async function requireAdminApprovalAccess() {
     };
   }
 
-  if (!hasPortalAccess(user, UserPortal.ADMIN_PORTAL)) {
+  if (user.role !== Role.ADMIN || !hasPortalAccess(user, UserPortal.ADMIN_PORTAL)) {
     return {
       ok: false as const,
       error: "Only admins can review change requests.",

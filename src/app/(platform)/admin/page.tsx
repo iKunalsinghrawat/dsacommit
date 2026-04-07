@@ -47,14 +47,20 @@ export default async function AdminPage({
         eyebrow="Admin panel"
         title="Manage users, access rights, moderation, and featured platform content."
         description="This control room now covers full user lifecycle operations, module access, moderation, and featured visibility from one place."
+        actions={
+          <Button asChild variant="secondary">
+            <Link href="/admin/approvals">Open approval queue</Link>
+          </Button>
+        }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <Card><CardTitle>{management.totals.totalUsers}</CardTitle><CardDescription>Total users</CardDescription></Card>
         <Card><CardTitle>{management.totals.activeUsers}</CardTitle><CardDescription>Active</CardDescription></Card>
         <Card><CardTitle>{management.totals.blockedUsers}</CardTitle><CardDescription>Blocked</CardDescription></Card>
         <Card><CardTitle>{management.totals.deactivatedUsers}</CardTitle><CardDescription>Deactivated</CardDescription></Card>
         <Card><CardTitle>{management.totals.removedUsers}</CardTitle><CardDescription>Removed</CardDescription></Card>
+        <Card><CardTitle>{data.pendingChangeRequests}</CardTitle><CardDescription>Pending approvals</CardDescription></Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.35fr]">

@@ -29,11 +29,12 @@ DSA Commit is a production-ready full-stack MVP for disciplined DSA preparation.
 - Roadmap, topic library, and topic detail pages
 - Problem catalog and problem detail pages with hints, editorial, company tags, bookmark/revision/solve tracking
 - Multi-language code workspace with per-problem per-language draft saving
+- Request-based approval workflow for roadmap items, topics, and problems
 - Company pages with focus areas, OA pattern, interview rounds, tips, and tagged questions
 - Mentor pages with follow, doubt posting, and guidance content
 - Community feed with post creation, likes, and comments
 - Company portal with role publishing, guidance/event publishing, and committed student discovery
-- Admin panel for featured content and moderation
+- Admin panel for featured content, moderation, and content approvals
 
 ## Database
 
@@ -46,7 +47,10 @@ Main models include:
 - `MentorProfile`
 - `CompanyProfile`
 - `Topic`
+- `RoadmapItem`
 - `Problem`
+- `ChangeRequest`
+- `ChangeRequestReview`
 - `CodeDraft`
 - `ProblemCompanyTag`
 - `Progress`
@@ -176,6 +180,18 @@ Current execution support:
 - `C`, `C++`, `Java`, `Python`, `Go`, `C#`, `Kotlin`, and `Rust` run through the configurable Judge0-backed remote runner
 
 If you want higher reliability or more throughput, point `JUDGE0_API_URL` at your own Judge0 deployment and set `JUDGE0_AUTH_TOKEN` if your provider requires authentication.
+
+## Content approval workflow
+
+Roadmap items, topics, and problems now use a request-based moderation flow:
+
+- users with access to the relevant portal can submit `CREATE`, `UPDATE`, and `DELETE` requests
+- live content is never changed on submit
+- admins review requests from `/admin/approvals`
+- approved requests publish to the live tables
+- rejected requests keep the live content unchanged and store the rejection reason
+
+The seed now creates sample pending, approved, and rejected change requests so the approval queue is visible right away after `npm run db:seed`.
 
 ## Docker
 

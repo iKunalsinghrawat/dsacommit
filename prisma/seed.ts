@@ -4,9 +4,12 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { faker } from "@faker-js/faker";
 import { startOfDay, subDays } from "date-fns";
 
-import { PrismaClient } from "../src/generated/prisma/client";
+import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import {
   CareerTarget,
+  ChangeRequestEntityType,
+  ChangeRequestOperationType,
+  ChangeRequestStatus,
   CommunityPostType,
   ParticipationStatus,
   Role,
@@ -82,6 +85,10 @@ const headlineCycle = [
   "Using consistency and revision to close weak topics one by one.",
 ];
 
+function toJsonValue(value: unknown) {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 type SeedStudent = {
   id: string;
   name: string;
@@ -101,6 +108,7 @@ type SeedStudent = {
 async function clearDatabase() {
   await prisma.changeRequestReview.deleteMany();
   await prisma.changeRequest.deleteMany();
+  await prisma.codeDraft.deleteMany();
   await prisma.postLike.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.communityPost.deleteMany();
@@ -241,8 +249,9 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
     topicMap.set(topic.slug, created.id);
   }
 
+  const roadmapItemMap = new Map<string, string>();
   for (const roadmapItem of roadmapItemSeed) {
-    await prisma.roadmapItem.create({
+    const createdRoadmapItem = await prisma.roadmapItem.create({
       data: {
         title: roadmapItem.title,
         slug: roadmapItem.slug,
@@ -253,6 +262,7 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
         topicId: topicMap.get(roadmapItem.topicSlug),
       },
     });
+    roadmapItemMap.set(roadmapItem.slug, createdRoadmapItem.id);
   }
 
   const companyMap = new Map<string, string>();
@@ -375,10 +385,11 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
     });
   }
 
+  const problemMap = new Map<string, string>();
   for (const problem of problemSeed) {
     const challenge = problemChallengeSeed[problem.slug];
 
-    await prisma.problem.create({
+    const createdProblem = await prisma.problem.create({
       data: {
         title: problem.title,
         slug: problem.slug,
@@ -418,6 +429,7 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
           : undefined,
       },
     });
+    problemMap.set(problem.slug, createdProblem.id);
   }
 
   const today = startOfDay(new Date());
@@ -438,7 +450,16 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
     });
   }
 
-  return { adminUser, badgeMap, topicMap, companyMap, companyOwnerMap, mentorMap };
+  return {
+    adminUser,
+    badgeMap,
+    topicMap,
+    roadmapItemMap,
+    companyMap,
+    companyOwnerMap,
+    mentorMap,
+    problemMap,
+  };
 }
 
 async function createStudents(
@@ -810,6 +831,297 @@ async function createStudentActivity(
   }
 }
 
+async function createApprovalWorkflowFixtures(input: {
+  adminUserId: string;
+  students: SeedStudent[];
+  topicMap: Map<string, string>;
+  roadmapItemMap: Map<string, string>;
+  companyMap: Map<string, string>;
+  problemMap: Map<string, string>;
+}) {
+  const [studentOne, studentTwo, studentThree, studentFour, studentFive] = input.students;
+  const arraysTopicId = input.topicMap.get("arrays")!;
+  const graphRoadmapId = input.roadmapItemMap.get("roadmap-graph")!;
+  const firstProblemId = input.problemMap.get(problemSeed[0].slug)!;
+
+  const arraysTopic = await prisma.topic.findUnique({
+    where: { id: arraysTopicId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      level: true,
+      sortOrder: true,
+      conceptSummary: true,
+      notes: true,
+      difficultyProgression: true,
+      revisionChecklist: true,
+      quiz: true,
+      estimatedHours: true,
+      icon: true,
+      accentColor: true,
+      isArchived: true,
+    },
+  });
+
+  const graphRoadmapItem = await prisma.roadmapItem.findUnique({
+    where: { id: graphRoadmapId },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      level: true,
+      summary: true,
+      details: true,
+      sortOrder: true,
+      topicId: true,
+      isArchived: true,
+    },
+  });
+
+  const firstProblem = await prisma.problem.findUnique({
+    where: { id: firstProblemId },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      difficulty: true,
+      topicId: true,
+      problemStatement: true,
+      examples: true,
+      constraints: true,
+      hints: true,
+      editorial: true,
+      similarProblemSlugs: true,
+      roleFocus: true,
+      frequency: true,
+      estimatedMinutes: true,
+      codeExecutionEnabled: true,
+      starterCode: true,
+      starterLanguage: true,
+      isArchived: true,
+      companyTags: {
+        select: {
+          companyId: true,
+          frequency: true,
+          role: true,
+          notes: true,
+        },
+        orderBy: [{ companyId: "asc" }, { frequency: "asc" }],
+      },
+      testCases: {
+        select: {
+          label: true,
+          input: true,
+          expectedOutput: true,
+          isHidden: true,
+          sortOrder: true,
+        },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+
+  if (!arraysTopic || !graphRoadmapItem || !firstProblem) {
+    throw new Error("Approval workflow fixtures require seeded topic, roadmap, and problem records.");
+  }
+
+  const pendingTopicUpdate = {
+    name: arraysTopic.name,
+    slug: arraysTopic.slug,
+    level: arraysTopic.level,
+    sortOrder: arraysTopic.sortOrder,
+    conceptSummary:
+      "Arrays teach indexing, iteration, and the habit of spotting prefix sums, windows, and in-place transforms before overcomplicating the solution.",
+    notes:
+      "Students should first classify whether the problem is about direct indexing, carrying state forward, or shrinking a window. Prefix sums and in-place mutation both deserve explicit revision notes.",
+    difficultyProgression: arraysTopic.difficultyProgression,
+    revisionChecklist: arraysTopic.revisionChecklist,
+    quiz: arraysTopic.quiz,
+    estimatedHours: arraysTopic.estimatedHours,
+    icon: arraysTopic.icon,
+    accentColor: arraysTopic.accentColor,
+  };
+
+  await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.TOPIC,
+      operationType: ChangeRequestOperationType.UPDATE,
+      status: ChangeRequestStatus.PENDING,
+      entityId: arraysTopic.id,
+      summary: "Update topic: Arrays with a clearer prefix-sum explanation",
+      requestedById: studentOne.id,
+      requestedData: toJsonValue(pendingTopicUpdate),
+      currentData: toJsonValue(arraysTopic),
+    },
+  });
+
+  const pendingRoadmapUpdate = {
+    title: graphRoadmapItem.title,
+    slug: graphRoadmapItem.slug,
+    level: graphRoadmapItem.level,
+    summary:
+      "Shift this checkpoint to emphasize traversal state, connected components, and shortest-path pattern selection before heavier graph optimization.",
+    details:
+      "Add a stronger distinction between representation choice, visited semantics, BFS vs DFS reasoning, and when to jump from traversal into shortest-path or topological workflows.",
+    sortOrder: graphRoadmapItem.sortOrder,
+    topicId: input.topicMap.get("graph"),
+  };
+
+  await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.ROADMAP_ITEM,
+      operationType: ChangeRequestOperationType.UPDATE,
+      status: ChangeRequestStatus.PENDING,
+      entityId: graphRoadmapItem.id,
+      summary: "Update roadmap item: Graph with a stronger traversal checkpoint",
+      requestedById: studentTwo.id,
+      requestedData: toJsonValue(pendingRoadmapUpdate),
+      currentData: toJsonValue(graphRoadmapItem),
+    },
+  });
+
+  const pendingProblemCreate = {
+    title: "Rotation Window Checkpoint",
+    slug: "rotation-window-checkpoint",
+    difficulty: "MEDIUM",
+    topicId: input.topicMap.get("sliding-window")!,
+    problemStatement:
+      "Given a binary array, return the minimum swaps required to group all 1s together in a circular array.",
+    examples: [
+      {
+        input: "nums = [0,1,0,1,1,0,0]",
+        output: "1",
+        explanation:
+          "A circular window of size equal to the count of ones can capture three ones with one misplaced zero.",
+      },
+    ],
+    constraints: ["1 <= nums.length <= 10^5", "nums[i] is either 0 or 1"],
+    hints: [
+      "Count the total number of ones first.",
+      "Use a sliding window of that size over a doubled view of the array.",
+    ],
+    editorial:
+      "Treat the circular array by scanning a window across indices modulo n. The answer is the number of zeros in the best window of size totalOnes.",
+    similarProblemSlugs: [problemSeed[0]?.slug ?? "pair-sum-checkpoint"],
+    roleFocus: "Intern",
+    frequency: 4,
+    estimatedMinutes: 35,
+    codeExecutionEnabled: true,
+    starterCode: "export function solve(input: string): string {\n  return \"\";\n}\n",
+    starterLanguage: "TYPESCRIPT",
+    companyTags: [
+      {
+        companyId: input.companyMap.get("amazon")!,
+        frequency: 4,
+        role: "Intern",
+        notes: "Common sliding-window variation for OA practice.",
+      },
+    ],
+    testCases: [
+      {
+        label: "Sample 1",
+        input: "[0,1,0,1,1,0,0]",
+        expectedOutput: "1",
+        isHidden: false,
+        sortOrder: 1,
+      },
+      {
+        label: "Edge",
+        input: "[1,1,1,1]",
+        expectedOutput: "0",
+        isHidden: true,
+        sortOrder: 2,
+      },
+    ],
+  };
+
+  await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.PROBLEM,
+      operationType: ChangeRequestOperationType.CREATE,
+      status: ChangeRequestStatus.PENDING,
+      summary: "Create problem: Rotation window checkpoint",
+      requestedById: studentThree.id,
+      requestedData: toJsonValue(pendingProblemCreate),
+    },
+  });
+
+  const publishedRoadmapItem = await prisma.roadmapItem.create({
+    data: {
+      title: "Greedy Interview Checkpoint",
+      slug: "roadmap-greedy-interview-checkpoint",
+      level: RoadmapLevel.ADVANCED,
+      summary:
+        "Add a checkpoint focused on proving why the greedy choice is safe before implementation.",
+      details:
+        "Students should practice identifying the decision invariant, proving local optimality, and checking the failure mode that would break a greedy approach.",
+      sortOrder: 10,
+      topicId: input.topicMap.get("greedy"),
+    },
+  });
+
+  const approvedRoadmapRequest = await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.ROADMAP_ITEM,
+      operationType: ChangeRequestOperationType.CREATE,
+      status: ChangeRequestStatus.APPROVED,
+      entityId: publishedRoadmapItem.id,
+      summary: "Create roadmap item: Greedy interview checkpoint",
+      requestedById: studentFour.id,
+      requestedData: toJsonValue({
+        title: publishedRoadmapItem.title,
+        slug: publishedRoadmapItem.slug,
+        level: publishedRoadmapItem.level,
+        summary: publishedRoadmapItem.summary,
+        details: publishedRoadmapItem.details,
+        sortOrder: publishedRoadmapItem.sortOrder,
+        topicId: publishedRoadmapItem.topicId,
+      }),
+      reviewedById: input.adminUserId,
+      reviewedAt: new Date(),
+    },
+  });
+
+  await prisma.changeRequestReview.create({
+    data: {
+      requestId: approvedRoadmapRequest.id,
+      reviewerId: input.adminUserId,
+      status: ChangeRequestStatus.APPROVED,
+    },
+  });
+
+  const rejectedProblemRequest = await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.PROBLEM,
+      operationType: ChangeRequestOperationType.DELETE,
+      status: ChangeRequestStatus.REJECTED,
+      entityId: firstProblem.id,
+      summary: `Remove problem: ${firstProblem.title}`,
+      requestedById: studentFive.id,
+      requestedData: toJsonValue({
+        deletionReason:
+          "Requesting review because this problem overlaps too much with another set and needs replacement, not direct removal.",
+      }),
+      currentData: toJsonValue(firstProblem),
+      rejectionReason:
+        "Keep the live problem for now. Replace it with a stronger alternative before requesting removal again.",
+      reviewedById: input.adminUserId,
+      reviewedAt: new Date(),
+    },
+  });
+
+  await prisma.changeRequestReview.create({
+    data: {
+      requestId: rejectedProblemRequest.id,
+      reviewerId: input.adminUserId,
+      status: ChangeRequestStatus.REJECTED,
+      note:
+        "Keep the live problem for now. Replace it with a stronger alternative before requesting removal again.",
+    },
+  });
+}
+
 async function main() {
   await clearDatabase();
 
@@ -817,10 +1129,18 @@ async function main() {
     process.env.SEED_DEFAULT_PASSWORD?.trim() || defaultCredentials.memberPassword;
   const memberPasswordHash = await hashPassword(memberPassword);
 
-  const { badgeMap, topicMap, companyMap, mentorMap } =
+  const { adminUser, badgeMap, topicMap, roadmapItemMap, companyMap, mentorMap, problemMap } =
     await createBaseUsersAndContent(memberPasswordHash);
   const students = await createStudents(memberPasswordHash, companyMap, topicMap);
   await createStudentActivity(students, badgeMap, topicMap, mentorMap, companyMap);
+  await createApprovalWorkflowFixtures({
+    adminUserId: adminUser.id,
+    students,
+    topicMap,
+    roadmapItemMap,
+    companyMap,
+    problemMap,
+  });
 
   console.log("Seed completed.");
   console.log(`Admin: ${defaultCredentials.admin.email} / ${defaultCredentials.admin.password}`);

@@ -40,20 +40,20 @@ type ProblemRequestableRecord = {
   hints: string[];
   editorial: string;
   similarProblemSlugs: string[];
-  roleFocus: string | null;
+  roleFocus?: string | null;
   frequency: number;
   estimatedMinutes: number;
   codeExecutionEnabled: boolean;
-  starterCode: string | null;
+  starterCode?: string | null;
   starterLanguage: CodeLanguage;
   companyTags: Array<{
     companyId: string;
     frequency: number;
-    role: string | null;
-    notes: string | null;
+    role?: string | null;
+    notes?: string | null;
   }>;
   testCases: Array<{
-    label: string | null;
+    label?: string | null;
     input: string;
     expectedOutput: string;
     isHidden: boolean;
