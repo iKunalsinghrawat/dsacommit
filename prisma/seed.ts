@@ -12,6 +12,7 @@ import {
   ChangeRequestStatus,
   CommunityPostType,
   ParticipationStatus,
+  RoadmapLevel,
   Role,
   StudentLevel,
   SubmissionState,
