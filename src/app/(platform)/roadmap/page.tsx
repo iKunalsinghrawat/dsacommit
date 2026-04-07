@@ -13,6 +13,9 @@ export const dynamic = "force-dynamic";
 export default async function RoadmapPage() {
   await requirePortalAccess(UserPortal.ROADMAP);
   const roadmap = await getRoadmapData();
+  const roadmapEntries = Object.entries(roadmap) as Array<
+    [keyof typeof roadmap, (typeof roadmap)[keyof typeof roadmap]]
+  >;
 
   return (
     <div className="space-y-8">
@@ -28,7 +31,7 @@ export default async function RoadmapPage() {
       />
 
       <div className="grid gap-6">
-        {Object.entries(roadmap).map(([level, items]) => (
+        {roadmapEntries.map(([level, items]) => (
           <Card key={level}>
             <CardHeader>
               <div className="flex flex-wrap items-center justify-between gap-3">

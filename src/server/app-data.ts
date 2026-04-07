@@ -5,6 +5,20 @@ import { addDays, format, startOfDay, subDays } from "date-fns";
 import { ChangeRequestStatus, Role, SubmissionState } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 
+function isApprovalWorkflowSchemaError(error: unknown) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code)
+      : "";
+  const message = error instanceof Error ? error.message : String(error ?? "");
+
+  return (
+    code === "P2021" ||
+    code === "P2022" ||
+    /ChangeRequest|RoadmapItem|isArchived|archivedAt/i.test(message)
+  );
+}
+
 function buildHeatmap(checkins: Array<{ date: Date; minutesCommitted: number; solvedCount: number }>) {
   const byDate = new Map(
     checkins.map((checkin) => [
@@ -313,9 +327,17 @@ export async function getAdminPanelData() {
       where: { isReported: true },
       include: { author: true, topic: true, company: true },
     }),
-    prisma.changeRequest.count({
-      where: { status: ChangeRequestStatus.PENDING },
-    }),
+    prisma.changeRequest
+      .count({
+        where: { status: ChangeRequestStatus.PENDING },
+      })
+      .catch((error) => {
+        if (!isApprovalWorkflowSchemaError(error)) {
+          throw error;
+        }
+
+        return 0;
+      }),
   ]);
 
   return { users, mentors, companies, problems, topics, badges, reportedPosts, pendingChangeRequests };

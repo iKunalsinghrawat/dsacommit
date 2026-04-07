@@ -20,6 +20,9 @@ export default async function HomePage() {
     getRoadmapData(),
     getLeaderboard(),
   ]);
+  const roadmapEntries = Object.entries(roadmap) as Array<
+    [keyof typeof roadmap, (typeof roadmap)[keyof typeof roadmap]]
+  >;
 
   return (
     <main>
@@ -179,7 +182,7 @@ export default async function HomePage() {
           <h2 className="mt-4 text-3xl font-semibold tracking-tight">Students always know what to do next.</h2>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {Object.entries(roadmap).map(([level, topics]) => (
+          {roadmapEntries.map(([level, topics]) => (
             <Card key={level}>
               <CardHeader>
                 <CardTitle>{level.toLowerCase().replace(/^\w/, (char) => char.toUpperCase())}</CardTitle>

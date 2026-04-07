@@ -44,12 +44,46 @@ const problemDetailBaseSelect = {
   },
 } as const;
 
+const problemWorkspaceSelect = {
+  codeExecutionEnabled: true,
+  starterCode: true,
+  starterLanguage: true,
+  testCases: {
+    where: { isHidden: false },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      id: true,
+      label: true,
+      input: true,
+      expectedOutput: true,
+      isHidden: true,
+      sortOrder: true,
+    },
+  },
+} as const;
+
+function getPrismaErrorDetails(error: unknown) {
+  return {
+    code:
+      typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code)
+        : "",
+    message: error instanceof Error ? error.message : String(error ?? ""),
+  };
+}
+
+function isApprovalWorkflowSchemaError(error: unknown) {
+  const { code, message } = getPrismaErrorDetails(error);
+
+  return (
+    code === "P2021" ||
+    code === "P2022" ||
+    /RoadmapItem|ChangeRequest|isArchived|archivedAt/i.test(message)
+  );
+}
+
 function isProblemWorkspaceSchemaError(error: unknown) {
-  const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String((error as { code?: unknown }).code)
-      : "";
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  const { code, message } = getPrismaErrorDetails(error);
 
   return (
     code === "P2021" ||
@@ -67,53 +101,123 @@ function getFallbackProblemWorkspaceState() {
   };
 }
 
+function buildRoadmapGroups<T extends { level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" }>(items: T[]) {
+  return {
+    BEGINNER: items.filter((item) => item.level === "BEGINNER"),
+    INTERMEDIATE: items.filter((item) => item.level === "INTERMEDIATE"),
+    ADVANCED: items.filter((item) => item.level === "ADVANCED"),
+  };
+}
+
+async function getFallbackRoadmapData() {
+  const topics = await prisma.topic.findMany({
+    include: {
+      problems: {
+        select: { id: true },
+      },
+    },
+    orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
+  });
+
+  return buildRoadmapGroups(
+    topics.map((topic) => ({
+      id: topic.id,
+      title: topic.name,
+      slug: topic.slug,
+      level: topic.level,
+      summary: topic.conceptSummary,
+      details: topic.notes,
+      sortOrder: topic.sortOrder,
+      topic: {
+        id: topic.id,
+        name: topic.name,
+        slug: topic.slug,
+        estimatedHours: topic.estimatedHours,
+        problems: topic.problems,
+      },
+    })),
+  );
+}
+
+async function fetchProblemRecord(input: {
+  id: string;
+  supportsArchiveFilter: boolean;
+  supportsWorkspace: boolean;
+}) {
+  const problem = await prisma.problem.findFirst({
+    where: input.supportsArchiveFilter ? { id: input.id, isArchived: false } : { id: input.id },
+    select: input.supportsWorkspace
+      ? {
+          ...problemDetailBaseSelect,
+          ...problemWorkspaceSelect,
+        }
+      : problemDetailBaseSelect,
+  });
+
+  if (!problem) {
+    return null;
+  }
+
+  if (!input.supportsWorkspace) {
+    return {
+      ...problem,
+      ...getFallbackProblemWorkspaceState(),
+    };
+  }
+
+  return problem;
+}
+
 async function getProblemRecord(id: string) {
   try {
-    const problem = await prisma.problem.findFirst({
-      where: { id, isArchived: false },
-      select: {
-        ...problemDetailBaseSelect,
-        codeExecutionEnabled: true,
-        starterCode: true,
-        starterLanguage: true,
-        testCases: {
-          where: { isHidden: false },
-          orderBy: { sortOrder: "asc" },
-          select: {
-            id: true,
-            label: true,
-            input: true,
-            expectedOutput: true,
-            isHidden: true,
-            sortOrder: true,
-          },
-        },
-      },
+    const problem = await fetchProblemRecord({
+      id,
+      supportsArchiveFilter: true,
+      supportsWorkspace: true,
     });
 
     return {
       problem,
       workspaceSchemaAvailable: true,
+      archiveSchemaAvailable: true,
     };
   } catch (error) {
-    if (!isProblemWorkspaceSchemaError(error)) {
+    if (!isProblemWorkspaceSchemaError(error) && !isApprovalWorkflowSchemaError(error)) {
       throw error;
     }
 
-    const fallbackProblem = await prisma.problem.findFirst({
-      where: { id, isArchived: false },
-      select: problemDetailBaseSelect,
-    });
+    const supportsArchiveFilter = !isApprovalWorkflowSchemaError(error);
+    const supportsWorkspace = !isProblemWorkspaceSchemaError(error);
 
-    return {
-      problem: fallbackProblem
-        ? {
-            ...fallbackProblem,
-            ...getFallbackProblemWorkspaceState(),
-          }
-        : null,
-      workspaceSchemaAvailable: false,
-    };
+    try {
+      const fallbackProblem = await fetchProblemRecord({
+        id,
+        supportsArchiveFilter,
+        supportsWorkspace,
+      });
+
+      return {
+        problem: fallbackProblem,
+        workspaceSchemaAvailable: supportsWorkspace,
+        archiveSchemaAvailable: supportsArchiveFilter,
+      };
+    } catch (retryError) {
+      if (!supportsWorkspace || !isProblemWorkspaceSchemaError(retryError)) {
+        throw retryError;
+      }
+
+      const fallbackProblem = await fetchProblemRecord({
+        id,
+        supportsArchiveFilter,
+        supportsWorkspace: false,
+      });
+
+      return {
+        problem: fallbackProblem,
+        workspaceSchemaAvailable: false,
+        archiveSchemaAvailable: supportsArchiveFilter,
+      };
+    }
   }
 }
 
@@ -211,59 +315,92 @@ export async function getLandingPageData() {
 }
 
 export async function getRoadmapData() {
-  const items = await prisma.roadmapItem.findMany({
-    where: { isArchived: false },
-    include: {
-      topic: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          estimatedHours: true,
-          problems: {
-            where: { isArchived: false },
-            select: { id: true },
+  try {
+    const items = await prisma.roadmapItem.findMany({
+      where: { isArchived: false },
+      include: {
+        topic: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            estimatedHours: true,
+            problems: {
+              where: { isArchived: false },
+              select: { id: true },
+            },
           },
         },
       },
-    },
-    orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
-  });
+      orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
+    });
 
-  const grouped = {
-    BEGINNER: items.filter((item) => item.level === "BEGINNER"),
-    INTERMEDIATE: items.filter((item) => item.level === "INTERMEDIATE"),
-    ADVANCED: items.filter((item) => item.level === "ADVANCED"),
-  };
+    return buildRoadmapGroups(items);
+  } catch (error) {
+    if (!isApprovalWorkflowSchemaError(error)) {
+      throw error;
+    }
 
-  return grouped;
+    return getFallbackRoadmapData();
+  }
 }
 
 export async function getTopicsList() {
-  return prisma.topic.findMany({
-    where: { isArchived: false },
-    include: {
-      problems: {
-        where: { isArchived: false },
+  try {
+    return await prisma.topic.findMany({
+      where: { isArchived: false },
+      include: {
+        problems: {
+          where: { isArchived: false },
+        },
       },
-    },
-    orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
-  });
+      orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
+    });
+  } catch (error) {
+    if (!isApprovalWorkflowSchemaError(error)) {
+      throw error;
+    }
+
+    return prisma.topic.findMany({
+      include: {
+        problems: true,
+      },
+      orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
+    });
+  }
 }
 
 export async function getTopicBySlug(slug: string) {
-  return prisma.topic.findFirst({
-    where: { slug, isArchived: false },
-    include: {
-      problems: {
-        where: { isArchived: false },
-        include: {
-          companyTags: { include: { company: true } },
+  try {
+    return await prisma.topic.findFirst({
+      where: { slug, isArchived: false },
+      include: {
+        problems: {
+          where: { isArchived: false },
+          include: {
+            companyTags: { include: { company: true } },
+          },
+          orderBy: [{ difficulty: "asc" }, { frequency: "desc" }],
         },
-        orderBy: [{ difficulty: "asc" }, { frequency: "desc" }],
       },
-    },
-  });
+    });
+  } catch (error) {
+    if (!isApprovalWorkflowSchemaError(error)) {
+      throw error;
+    }
+
+    return prisma.topic.findUnique({
+      where: { slug },
+      include: {
+        problems: {
+          include: {
+            companyTags: { include: { company: true } },
+          },
+          orderBy: [{ difficulty: "asc" }, { frequency: "desc" }],
+        },
+      },
+    });
+  }
 }
 
 export async function getProblemsList(filters?: {
@@ -272,36 +409,60 @@ export async function getProblemsList(filters?: {
   difficulty?: Difficulty;
   role?: string;
 }) {
-  return prisma.problem.findMany({
-    where: {
-      isArchived: false,
-      topic: filters?.topic ? { slug: filters.topic } : undefined,
-      difficulty: filters?.difficulty,
-      roleFocus: filters?.role ?? undefined,
-      companyTags: filters?.company
-        ? {
-            some: {
-              company: {
-                slug: filters.company,
-              },
+  const baseWhere = {
+    topic: filters?.topic ? { slug: filters.topic } : undefined,
+    difficulty: filters?.difficulty,
+    roleFocus: filters?.role ?? undefined,
+    companyTags: filters?.company
+      ? {
+          some: {
+            company: {
+              slug: filters.company,
             },
-          }
-        : undefined,
-    },
-    include: {
-      topic: true,
-      companyTags: {
-        include: {
-          company: true,
+          },
+        }
+      : undefined,
+  };
+
+  try {
+    return await prisma.problem.findMany({
+      where: {
+        ...baseWhere,
+        isArchived: false,
+      },
+      include: {
+        topic: true,
+        companyTags: {
+          include: {
+            company: true,
+          },
         },
       },
-    },
-    orderBy: [{ frequency: "desc" }, { difficulty: "asc" }, { title: "asc" }],
-  });
+      orderBy: [{ frequency: "desc" }, { difficulty: "asc" }, { title: "asc" }],
+    });
+  } catch (error) {
+    if (!isApprovalWorkflowSchemaError(error)) {
+      throw error;
+    }
+
+    return prisma.problem.findMany({
+      where: baseWhere,
+      include: {
+        topic: true,
+        companyTags: {
+          include: {
+            company: true,
+          },
+        },
+      },
+      orderBy: [{ frequency: "desc" }, { difficulty: "asc" }, { title: "asc" }],
+    });
+  }
 }
 
 export async function getProblemById(id: string, userId?: string) {
-  const [{ problem, workspaceSchemaAvailable }, submission, bookmark, revision] = await Promise.all([
+  const [{ problem, workspaceSchemaAvailable, archiveSchemaAvailable }, submission, bookmark, revision] =
+    await Promise.all([
     getProblemRecord(id),
     userId
       ? prisma.submissionStatus.findUnique({
@@ -318,11 +479,16 @@ export async function getProblemById(id: string, userId?: string) {
           where: { userId_problemId: { userId, problemId: id } },
         })
       : null,
-  ]);
+    ]);
 
   if (!problem) {
     return null;
   }
+
+  const normalizedProblem = {
+    ...getFallbackProblemWorkspaceState(),
+    ...problem,
+  };
 
   const { codeDrafts, codeSubmissions } = await getCodeWorkspaceRecords({
     userId,
@@ -330,11 +496,11 @@ export async function getProblemById(id: string, userId?: string) {
     workspaceSchemaAvailable,
   });
 
-  const similarProblems = problem.similarProblemSlugs.length
+  const similarProblems = normalizedProblem.similarProblemSlugs.length
     ? await prisma.problem.findMany({
         where: {
-          isArchived: false,
-          slug: { in: problem.similarProblemSlugs },
+          ...(archiveSchemaAvailable ? { isArchived: false } : {}),
+          slug: { in: normalizedProblem.similarProblemSlugs },
         },
         select: {
           id: true,
@@ -349,7 +515,7 @@ export async function getProblemById(id: string, userId?: string) {
     : [];
 
   return {
-    problem,
+    problem: normalizedProblem,
     similarProblems,
     submissionStatus: submission ?? null,
     isBookmarked: Boolean(bookmark),
@@ -516,7 +682,15 @@ export async function getCommunityFeed() {
 
 export async function getCatalogMeta() {
   const [topics, companies] = await Promise.all([
-    prisma.topic.findMany({ where: { isArchived: false }, orderBy: { sortOrder: "asc" } }),
+    prisma.topic
+      .findMany({ where: { isArchived: false }, orderBy: { sortOrder: "asc" } })
+      .catch((error) => {
+        if (!isApprovalWorkflowSchemaError(error)) {
+          throw error;
+        }
+
+        return prisma.topic.findMany({ orderBy: { sortOrder: "asc" } });
+      }),
     prisma.companyProfile.findMany({ orderBy: { name: "asc" } }),
   ]);
 
