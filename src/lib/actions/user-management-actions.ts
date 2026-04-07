@@ -623,7 +623,7 @@ export async function updateOwnProfileAction(formData: FormData): Promise<UserMa
     slug: formData.get("slug"),
     role: user.role,
     status: user.status,
-    profileVisibility: formData.get("profileVisibility") ?? user.profileVisibility,
+    profileVisibility: formData.get("profileVisibility") ?? ProfileVisibility.PUBLIC,
     accessGrants: user.accessGrants,
     headline: readOptionalFormValue(formData, "headline"),
     bio: readOptionalFormValue(formData, "bio"),

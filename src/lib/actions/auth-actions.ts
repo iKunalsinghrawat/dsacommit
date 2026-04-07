@@ -3,7 +3,7 @@
 import { CareerTarget, Role, StudentLevel, UserStatus } from "@/generated/prisma/enums";
 import { getDefaultAccessGrants } from "@/lib/access-control";
 import { getAuthRuntimeSummary } from "@/lib/auth-config";
-import { buildSessionPayload, getHomeForRole } from "@/lib/auth";
+import { authSessionUserSelect, buildSessionPayload, getHomeForRole } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import {
@@ -108,6 +108,10 @@ export async function signInAction(
   try {
     const user = await prisma.user.findUnique({
       where: { email: parsed.data.email.toLowerCase() },
+      select: {
+        ...authSessionUserSelect,
+        passwordHash: true,
+      },
     });
 
     if (!user) {
@@ -251,6 +255,7 @@ export async function signUpAction(
             },
           },
         },
+        select: authSessionUserSelect,
       });
 
       await createSession(buildSessionPayload(user));
@@ -272,6 +277,7 @@ export async function signUpAction(
           isOnboarded: true,
           isVerified: true,
         },
+        select: authSessionUserSelect,
       });
 
       const company = await findOrCreateCompanyByName(parsed.data.companyName ?? "Independent Mentor");
@@ -309,6 +315,7 @@ export async function signUpAction(
           isOnboarded: true,
           isVerified: true,
         },
+        select: authSessionUserSelect,
       });
 
       await findOrCreateCompanyByName(parsed.data.companyName ?? `${parsed.data.name} Labs`, user.id);

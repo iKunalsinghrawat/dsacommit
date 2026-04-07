@@ -1,5 +1,6 @@
 const AUTH_SECRET_KEYS = ["AUTH_SECRET", "NEXTAUTH_SECRET"] as const;
 const AUTH_URL_KEYS = ["AUTH_URL", "NEXTAUTH_URL", "NEXT_PUBLIC_APP_URL"] as const;
+const PLATFORM_URL_KEYS = ["VERCEL_PROJECT_PRODUCTION_URL", "URL", "VERCEL_URL", "DEPLOY_PRIME_URL"] as const;
 
 type AuthSecretKey = (typeof AUTH_SECRET_KEYS)[number];
 type AuthUrlKey = (typeof AUTH_URL_KEYS)[number];
@@ -36,6 +37,19 @@ function normalizeBaseUrl(value?: string | null) {
   return `https://${trimmed}`;
 }
 
+function shouldIgnoreResolvedUrl(value: string) {
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
 export function getAuthSecretConfig() {
   return readFirstEnvValue(AUTH_SECRET_KEYS) as { key: AuthSecretKey; value: string } | null;
 }
@@ -57,21 +71,39 @@ export function requireAuthSecret() {
 export function getAuthUrlConfig() {
   const explicitUrl =
     (readFirstEnvValue(AUTH_URL_KEYS) as { key: AuthUrlKey; value: string } | null) ??
-    (readFirstEnvValue(["VERCEL_PROJECT_PRODUCTION_URL", "URL", "VERCEL_URL", "DEPLOY_PRIME_URL"] as const) as {
-      key: "VERCEL_PROJECT_PRODUCTION_URL" | "URL" | "VERCEL_URL" | "DEPLOY_PRIME_URL";
+    (readFirstEnvValue(PLATFORM_URL_KEYS) as {
+      key: (typeof PLATFORM_URL_KEYS)[number];
       value: string;
     } | null);
 
-  if (!explicitUrl) {
+  if (explicitUrl) {
+    const normalizedExplicitUrl = normalizeBaseUrl(explicitUrl.value);
+
+    if (normalizedExplicitUrl && !shouldIgnoreResolvedUrl(normalizedExplicitUrl)) {
+      return {
+        key: explicitUrl.key,
+        value: normalizedExplicitUrl,
+      } as const;
+    }
+  }
+
+  const platformUrl = readFirstEnvValue(PLATFORM_URL_KEYS) as {
+    key: (typeof PLATFORM_URL_KEYS)[number];
+    value: string;
+  } | null;
+
+  if (!platformUrl) {
     return {
       key: null,
-      value: "http://localhost:3000",
+      value: process.env.NODE_ENV === "production" ? "" : "http://localhost:3000",
     } as const;
   }
 
+  const normalizedPlatformUrl = normalizeBaseUrl(platformUrl.value);
+
   return {
-    key: explicitUrl.key,
-    value: normalizeBaseUrl(explicitUrl.value) ?? "http://localhost:3000",
+    key: platformUrl.key,
+    value: normalizedPlatformUrl ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000"),
   } as const;
 }
 

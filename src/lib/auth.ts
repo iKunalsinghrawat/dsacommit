@@ -19,6 +19,67 @@ const authCompanySummarySelect = {
   slug: true,
 } as const;
 
+export const authSessionUserSelect = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  status: true,
+  accessGrants: true,
+  passwordResetRequired: true,
+  sessionVersion: true,
+} as const;
+
+const authCurrentUserSelect = {
+  ...authSessionUserSelect,
+  slug: true,
+  avatarUrl: true,
+  headline: true,
+  bio: true,
+  location: true,
+  githubUrl: true,
+  linkedinUrl: true,
+  portfolioUrl: true,
+  isVerified: true,
+  isFeatured: true,
+  isOnboarded: true,
+  createdAt: true,
+  updatedAt: true,
+  lastActiveAt: true,
+  studentProfile: {
+    include: {
+      targetCompanies: {
+        include: {
+          company: {
+            select: authCompanySummarySelect,
+          },
+        },
+      },
+      weakTopics: {
+        include: {
+          topic: {
+            select: authTopicSummarySelect,
+          },
+        },
+      },
+      mentorFollows: true,
+    },
+  },
+  mentorProfile: {
+    include: {
+      company: {
+        select: authCompanySummarySelect,
+      },
+      followers: true,
+    },
+  },
+  ownedCompany: {
+    select: authCompanySummarySelect,
+  },
+  streak: true,
+  userBadges: { include: { badge: true } },
+} as const;
+
 export function buildSessionPayload(user: {
   id: string;
   email: string;
@@ -53,40 +114,7 @@ export async function getCurrentUser() {
   try {
     user = await prisma.user.findUnique({
       where: { id: session.userId },
-      include: {
-        studentProfile: {
-          include: {
-            targetCompanies: {
-              include: {
-                company: {
-                  select: authCompanySummarySelect,
-                },
-              },
-            },
-            weakTopics: {
-              include: {
-                topic: {
-                  select: authTopicSummarySelect,
-                },
-              },
-            },
-            mentorFollows: true,
-          },
-        },
-        mentorProfile: {
-          include: {
-            company: {
-              select: authCompanySummarySelect,
-            },
-            followers: true,
-          },
-        },
-        ownedCompany: {
-          select: authCompanySummarySelect,
-        },
-        streak: true,
-        userBadges: { include: { badge: true } },
-      },
+      select: authCurrentUserSelect,
     });
   } catch (error) {
     logServerError("getCurrentUser", error, { userId: session.userId });

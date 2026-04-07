@@ -238,6 +238,7 @@ Important: Vercel documents that the Hobby plan is for non-commercial personal u
 
 5. Set either `AUTH_SECRET` or `NEXTAUTH_SECRET`. The app accepts both, but `AUTH_SECRET` is the primary name.
 6. Set either `AUTH_URL`, `NEXTAUTH_URL`, or `NEXT_PUBLIC_APP_URL` to your production domain if you already know it. If not, you can leave them blank for the first deploy because the app now falls back to Vercel system URLs automatically.
+   If an old `localhost` value is still present in production, the app now ignores it and prefers the Vercel runtime URL.
 7. Deploy the app.
 8. Run database setup once against production:
 

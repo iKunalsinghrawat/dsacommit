@@ -8,6 +8,8 @@ const originalEnv = {
   AUTH_URL: process.env.AUTH_URL,
   NEXTAUTH_URL: process.env.NEXTAUTH_URL,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  VERCEL_URL: process.env.VERCEL_URL,
+  NODE_ENV: process.env.NODE_ENV,
 };
 
 function restoreEnvValue(key: keyof typeof originalEnv, value: string | undefined) {
@@ -25,6 +27,8 @@ afterEach(() => {
   restoreEnvValue("AUTH_URL", originalEnv.AUTH_URL);
   restoreEnvValue("NEXTAUTH_URL", originalEnv.NEXTAUTH_URL);
   restoreEnvValue("NEXT_PUBLIC_APP_URL", originalEnv.NEXT_PUBLIC_APP_URL);
+  restoreEnvValue("VERCEL_URL", originalEnv.VERCEL_URL);
+  restoreEnvValue("NODE_ENV", originalEnv.NODE_ENV);
 });
 
 describe("auth config", () => {
@@ -70,6 +74,17 @@ describe("auth config", () => {
       authSecretSource: "NEXTAUTH_SECRET",
       authUrlSource: "NEXTAUTH_URL",
       authUrl: "https://app.example.com",
+    });
+  });
+
+  it("ignores localhost auth URLs in production and falls back to platform URLs", () => {
+    process.env.NODE_ENV = "production";
+    process.env.AUTH_URL = "http://localhost:3000";
+    process.env.VERCEL_URL = "dsa-commit.vercel.app";
+
+    expect(getAuthUrlConfig()).toEqual({
+      key: "VERCEL_URL",
+      value: "https://dsa-commit.vercel.app",
     });
   });
 });
