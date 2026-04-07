@@ -135,6 +135,17 @@ npm run db:seed
 npm run db:studio
 ```
 
+## Code execution configuration
+
+The coding workspace runner uses these environment variables:
+
+- `CODE_EXECUTION_PROVIDER`
+- `JUDGE0_API_URL`
+- `JUDGE0_AUTH_HEADER`
+- `JUDGE0_AUTH_TOKEN`
+
+The default `.env.example` values enable the public Judge0 CE runner for local development.
+
 ## Multi-language workspace
 
 The coding workspace now supports:
@@ -161,17 +172,10 @@ The last selected language also persists per problem after refresh.
 
 Current execution support:
 
-- `JavaScript`
-- `TypeScript`
+- `JavaScript` and `TypeScript` run in the built-in local sandbox
+- `C`, `C++`, `Java`, `Python`, `Go`, `C#`, `Kotlin`, and `Rust` run through the configurable Judge0-backed remote runner
 
-The remaining languages already have:
-
-- syntax highlighting
-- language-specific starter templates
-- per-language draft persistence
-- execution-ready backend branching
-
-This means a real sandbox or judge can be plugged in later without changing the workspace UI model.
+If you want higher reliability or more throughput, point `JUDGE0_API_URL` at your own Judge0 deployment and set `JUDGE0_AUTH_TOKEN` if your provider requires authentication.
 
 ## Docker
 
@@ -293,7 +297,7 @@ prisma/
 
 ## Known limitations
 
-- Real code execution is currently active for JavaScript and TypeScript only. Other workspace languages are fully available in draft mode and are ready for future sandbox integration.
+- JavaScript and TypeScript run locally, while the remaining languages depend on Judge0 availability. For production reliability and higher throughput, use a dedicated Judge0 deployment instead of the public CE endpoint.
 - Community moderation is intentionally lightweight.
 - Mentor mock interview slot booking is represented as a workflow placeholder rather than a calendar integration.
 - Company portal is single-owner in this MVP rather than multi-member.

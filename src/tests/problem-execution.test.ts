@@ -99,18 +99,20 @@ describe("problem execution service", () => {
     });
   });
 
-  it("returns a clear runtime message for languages whose execution backend is not configured yet", () => {
+  it("reports syntax errors with a compile-specific status", () => {
     const result = executeProblemCode({
       code: `
-def solve(raw_input: str) -> str:
-    return "3"
+        export function solve(input: string): string {
+          const answer = ;
+          return String(answer);
+        }
       `,
-      language: CodeLanguage.PYTHON,
+      language: CodeLanguage.TYPESCRIPT,
       testCases: sampleCases,
       revealHiddenDetails: false,
     });
 
-    expect(result.summary.status).toBe(CodeExecutionStatus.RUNTIME_ERROR);
-    expect(result.results[0]?.errorMessage).toContain("Python draft support is ready");
+    expect(result.summary.status).toBe(CodeExecutionStatus.SYNTAX_ERROR);
+    expect(result.results[0]?.errorMessage).toContain("compile error");
   });
 });

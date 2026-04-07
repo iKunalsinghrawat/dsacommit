@@ -3,7 +3,7 @@ import "server-only";
 import { Script, createContext } from "node:vm";
 import ts from "typescript";
 
-import { getExecutionUnavailableMessage, supportsLocalExecution } from "@/config/languages";
+import { getLanguageConfig, supportsLocalExecution } from "@/config/languages";
 import { CodeExecutionStatus, CodeLanguage } from "@/generated/prisma/enums";
 
 const MODULE_BOOT_TIMEOUT_MS = 400;
@@ -237,7 +237,7 @@ function runSingleTest(compiledCode: string, testCase: ExecutionTestCase) {
   }
 }
 
-function deriveOverallStatus(results: ExecutionTestResult[]) {
+export function deriveOverallStatus(results: ExecutionTestResult[]) {
   if (results.some((result) => result.status === CodeExecutionStatus.SYNTAX_ERROR)) {
     return CodeExecutionStatus.SYNTAX_ERROR;
   }
@@ -263,7 +263,10 @@ function deriveOverallStatus(results: ExecutionTestResult[]) {
   return CodeExecutionStatus.FAILED;
 }
 
-function maskResult(result: ExecutionTestResult, revealHiddenDetails: boolean): ExecutionTestResult {
+export function maskExecutionResult(
+  result: ExecutionTestResult,
+  revealHiddenDetails: boolean,
+): ExecutionTestResult {
   if (!result.isHidden || revealHiddenDetails) {
     return result;
   }
@@ -277,7 +280,44 @@ function maskResult(result: ExecutionTestResult, revealHiddenDetails: boolean): 
   };
 }
 
-export function executeProblemCode(input: {
+export function buildExecutionFailureResponse(input: {
+  language: CodeLanguage;
+  testCases: ExecutionTestCase[];
+  revealHiddenDetails?: boolean;
+  message: string;
+  runtimeMs: number;
+  status?: CodeExecutionStatus;
+}): ExecutionResponse {
+  const config = getLanguageConfig(input.language);
+  const failureStatus = input.status ?? CodeExecutionStatus.RUNTIME_ERROR;
+
+  return {
+    summary: {
+      passedCount: 0,
+      totalCount: input.testCases.length,
+      status: failureStatus,
+      runtimeMs: input.runtimeMs,
+    },
+    results: input.testCases.map((testCase) =>
+      maskExecutionResult(
+        {
+          id: testCase.id,
+          label: testCase.label ?? `Test ${testCase.sortOrder}`,
+          isHidden: testCase.isHidden,
+          status: failureStatus,
+          passed: false,
+          input: testCase.input,
+          expectedOutput: testCase.expectedOutput,
+          actualOutput: null,
+          errorMessage: input.message || `${config.label} execution failed.`,
+        },
+        input.revealHiddenDetails ?? false,
+      ),
+    ),
+  };
+}
+
+export function executeProblemCodeLocally(input: {
   code: string;
   language: CodeLanguage;
   testCases: ExecutionTestCase[];
@@ -286,32 +326,13 @@ export function executeProblemCode(input: {
   const startedAt = performance.now();
 
   if (!supportsLocalExecution(input.language)) {
-    const message = getExecutionUnavailableMessage(input.language);
-
-    return {
-      summary: {
-        passedCount: 0,
-        totalCount: input.testCases.length,
-        status: CodeExecutionStatus.RUNTIME_ERROR,
-        runtimeMs: Math.max(1, Math.round(performance.now() - startedAt)),
-      },
-      results: input.testCases.map((testCase) =>
-        maskResult(
-          {
-            id: testCase.id,
-            label: testCase.label ?? `Test ${testCase.sortOrder}`,
-            isHidden: testCase.isHidden,
-            status: CodeExecutionStatus.RUNTIME_ERROR,
-            passed: false,
-            input: testCase.input,
-            expectedOutput: testCase.expectedOutput,
-            actualOutput: null,
-            errorMessage: message,
-          },
-          input.revealHiddenDetails ?? false,
-        ),
-      ),
-    };
+    return buildExecutionFailureResponse({
+      language: input.language,
+      testCases: input.testCases,
+      revealHiddenDetails: input.revealHiddenDetails,
+      runtimeMs: Math.max(1, Math.round(performance.now() - startedAt)),
+      message: `${getLanguageConfig(input.language).label} uses the remote execution provider. Route this submission through the server-side runner instead of the local sandbox.`,
+    });
   }
 
   try {
@@ -344,7 +365,9 @@ export function executeProblemCode(input: {
         status: deriveOverallStatus(results),
         runtimeMs,
       },
-      results: results.map((result) => maskResult(result, input.revealHiddenDetails ?? false)),
+      results: results.map((result) =>
+        maskExecutionResult(result, input.revealHiddenDetails ?? false),
+      ),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Execution failed.";
@@ -354,29 +377,15 @@ export function executeProblemCode(input: {
     const cleanMessage =
       status === CodeExecutionStatus.SYNTAX_ERROR ? message.replace(/^[^:]+:/, "").trim() : message;
 
-    return {
-      summary: {
-        passedCount: 0,
-        totalCount: input.testCases.length,
-        status,
-        runtimeMs: Math.max(1, Math.round(performance.now() - startedAt)),
-      },
-      results: input.testCases.map((testCase) =>
-        maskResult(
-          {
-            id: testCase.id,
-            label: testCase.label ?? `Test ${testCase.sortOrder}`,
-            isHidden: testCase.isHidden,
-            status,
-            passed: false,
-            input: testCase.input,
-            expectedOutput: testCase.expectedOutput,
-            actualOutput: null,
-            errorMessage: cleanMessage,
-          },
-          input.revealHiddenDetails ?? false,
-        ),
-      ),
-    };
+    return buildExecutionFailureResponse({
+      language: input.language,
+      testCases: input.testCases,
+      revealHiddenDetails: input.revealHiddenDetails,
+      runtimeMs: Math.max(1, Math.round(performance.now() - startedAt)),
+      message: cleanMessage,
+      status,
+    });
   }
 }
+
+export const executeProblemCode = executeProblemCodeLocally;

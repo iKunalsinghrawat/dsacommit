@@ -22,7 +22,7 @@ import {
   createStarterTemplateForLanguage,
   getLanguageConfig,
   getLanguageOptions,
-  supportsLocalExecution,
+  supportsExecution,
   supportedCodeLanguages,
 } from "@/config/languages";
 import { CodeExecutionStatus, CodeLanguage } from "@/generated/prisma/enums";
@@ -265,7 +265,9 @@ export function ProblemWorkspace({
   const selectedCode = codeByLanguage[language];
   const selectedSubmission = latestSubmissionsState[language] ?? null;
   const selectedLastEditedAt = draftUpdatedAtByLanguage[language] ?? null;
-  const selectedLanguageSupportsExecution = supportsLocalExecution(language);
+  const selectedLanguageSupportsExecution = supportsExecution(language);
+  const selectedLanguageUsesRemoteExecution =
+    selectedLanguageConfig.executionMode === "remote";
   const selectedFileLabel = `solution.${selectedLanguageConfig.fileExtension}`;
 
   const testCasesToRender = useMemo(() => {
@@ -607,7 +609,11 @@ export function ProblemWorkspace({
               <Badge variant="secondary">{selectedLanguageConfig.label}</Badge>
               <Badge variant="outline">{selectedLanguageConfig.versionLabel}</Badge>
               <Badge variant={selectedLanguageSupportsExecution ? "success" : "outline"}>
-                {selectedLanguageSupportsExecution ? "Run and submit ready" : "Draft mode"}
+                {selectedLanguageSupportsExecution
+                  ? selectedLanguageUsesRemoteExecution
+                    ? "Remote runner ready"
+                    : "Run and submit ready"
+                  : "Execution unavailable"}
               </Badge>
             </div>
             <CardDescription>
@@ -679,7 +685,9 @@ export function ProblemWorkspace({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             <Badge variant="outline">{selectedFileLabel}</Badge>
             {!selectedLanguageSupportsExecution ? (
-              <span>Drafts save normally. Execution can be plugged in later for this runtime.</span>
+              <span>Drafts save normally. Execution is not available on this deployment right now.</span>
+            ) : selectedLanguageUsesRemoteExecution ? (
+              <span>Run uses visible sample tests in the remote sandbox. Submit also checks hidden tests.</span>
             ) : (
               <span>Run uses sample tests. Submit includes hidden tests.</span>
             )}
@@ -711,7 +719,11 @@ export function ProblemWorkspace({
               ) : (
                 <Badge variant="outline">
                   <Code2 className="size-3.5" />
-                  {selectedLanguageSupportsExecution ? "Ready to run" : "Waiting for runtime"}
+                  {selectedLanguageSupportsExecution
+                    ? selectedLanguageUsesRemoteExecution
+                      ? "Remote runner ready"
+                      : "Ready to run"
+                    : "Execution unavailable"}
                 </Badge>
               )}
             </div>
