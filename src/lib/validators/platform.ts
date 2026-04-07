@@ -1,8 +1,13 @@
 import {
   CareerTarget,
+  ChangeRequestEntityType,
+  ChangeRequestOperationType,
+  ChangeRequestStatus,
   CodeLanguage,
   CommunityPostType,
+  Difficulty,
   Role,
+  RoadmapLevel,
   StudentLevel,
   SubmissionState,
   UserPortal,
@@ -32,6 +37,158 @@ const optionalUrl = z
 const optionalBoolean = z
   .union([z.literal("on"), z.literal("true"), z.literal("false"), z.literal("off"), z.null(), z.undefined()])
   .transform((value) => value === "on" || value === "true");
+
+const quizItemSchema = z.object({
+  question: z.string().trim().min(3).max(220),
+  answer: z.string().trim().min(3).max(400),
+});
+
+const problemExampleSchema = z.object({
+  input: z.string().trim().min(1).max(4000),
+  output: z.string().trim().min(1).max(4000),
+  explanation: z.string().trim().min(3).max(4000),
+});
+
+const problemCompanyTagSchema = z.object({
+  companyId: z.string().min(1),
+  frequency: z.coerce.number().int().min(1).max(5),
+  role: optionalText(80),
+  notes: optionalText(240),
+});
+
+const problemTestCaseSchema = z.object({
+  label: optionalText(80),
+  input: z.string().trim().min(1).max(4000),
+  expectedOutput: z.string().trim().min(1).max(4000),
+  isHidden: z.boolean().optional().default(false),
+  sortOrder: z.coerce.number().int().min(1).max(1000),
+});
+
+export const topicRequestDataSchema = z.object({
+  name: z.string().trim().min(3).max(80),
+  slug: z
+    .string()
+    .trim()
+    .min(3)
+    .max(80)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only."),
+  level: z.enum(RoadmapLevel),
+  sortOrder: z.coerce.number().int().min(1).max(999),
+  conceptSummary: z.string().trim().min(20).max(600),
+  notes: z.string().trim().min(20).max(3000),
+  difficultyProgression: z.array(z.string().trim().min(3).max(200)).min(1).max(8),
+  revisionChecklist: z.array(z.string().trim().min(3).max(200)).min(1).max(10),
+  quiz: z.array(quizItemSchema).min(1).max(10),
+  estimatedHours: z.coerce.number().int().min(1).max(400),
+  icon: z.string().trim().min(2).max(60),
+  accentColor: z.string().trim().min(2).max(40),
+});
+
+export const roadmapItemRequestDataSchema = z.object({
+  title: z.string().trim().min(3).max(120),
+  slug: z
+    .string()
+    .trim()
+    .min(3)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only."),
+  level: z.enum(RoadmapLevel),
+  summary: z.string().trim().min(12).max(500),
+  details: z.string().trim().min(12).max(3000),
+  sortOrder: z.coerce.number().int().min(1).max(999),
+  topicId: z.string().trim().min(1).optional().transform((value) => value || undefined),
+});
+
+export const problemRequestDataSchema = z.object({
+  title: z.string().trim().min(4).max(140),
+  slug: z
+    .string()
+    .trim()
+    .min(3)
+    .max(140)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and hyphens only."),
+  difficulty: z.enum(Difficulty),
+  topicId: z.string().min(1),
+  problemStatement: z.string().trim().min(20).max(6000),
+  examples: z.array(problemExampleSchema).min(1).max(10),
+  constraints: z.array(z.string().trim().min(2).max(240)).min(1).max(12),
+  hints: z.array(z.string().trim().min(3).max(500)).min(1).max(12),
+  editorial: z.string().trim().min(20).max(5000),
+  similarProblemSlugs: z.array(z.string().trim().min(3).max(140)).max(12),
+  roleFocus: optionalText(80),
+  frequency: z.coerce.number().int().min(1).max(5),
+  estimatedMinutes: z.coerce.number().int().min(5).max(240),
+  codeExecutionEnabled: z.boolean(),
+  starterCode: optionalText(MAX_CODE_SIZE),
+  starterLanguage: z.enum(CodeLanguage),
+  companyTags: z.array(problemCompanyTagSchema).max(20),
+  testCases: z.array(problemTestCaseSchema).max(20),
+});
+
+const createRequestSchema = z.object({
+  operationType: z.enum(ChangeRequestOperationType),
+  entityId: z.string().trim().min(1).optional(),
+  summary: z.string().trim().min(6).max(180),
+});
+
+export const topicChangeRequestSchema = createRequestSchema.extend({
+  entityType: z.literal(ChangeRequestEntityType.TOPIC),
+  data: topicRequestDataSchema.optional(),
+  deletionReason: optionalText(280),
+}).superRefine((values, ctx) => {
+  if (values.operationType !== ChangeRequestOperationType.DELETE && !values.data) {
+    ctx.addIssue({ code: "custom", path: ["data"], message: "Topic details are required." });
+  }
+
+  if (values.operationType !== ChangeRequestOperationType.CREATE && !values.entityId) {
+    ctx.addIssue({ code: "custom", path: ["entityId"], message: "Choose a live topic to update or remove." });
+  }
+});
+
+export const roadmapItemChangeRequestSchema = createRequestSchema.extend({
+  entityType: z.literal(ChangeRequestEntityType.ROADMAP_ITEM),
+  data: roadmapItemRequestDataSchema.optional(),
+  deletionReason: optionalText(280),
+}).superRefine((values, ctx) => {
+  if (values.operationType !== ChangeRequestOperationType.DELETE && !values.data) {
+    ctx.addIssue({ code: "custom", path: ["data"], message: "Roadmap item details are required." });
+  }
+
+  if (values.operationType !== ChangeRequestOperationType.CREATE && !values.entityId) {
+    ctx.addIssue({ code: "custom", path: ["entityId"], message: "Choose a live roadmap item to update or remove." });
+  }
+});
+
+export const problemChangeRequestSchema = createRequestSchema.extend({
+  entityType: z.literal(ChangeRequestEntityType.PROBLEM),
+  data: problemRequestDataSchema.optional(),
+  deletionReason: optionalText(280),
+}).superRefine((values, ctx) => {
+  if (values.operationType !== ChangeRequestOperationType.DELETE && !values.data) {
+    ctx.addIssue({ code: "custom", path: ["data"], message: "Problem details are required." });
+  }
+
+  if (values.operationType !== ChangeRequestOperationType.CREATE && !values.entityId) {
+    ctx.addIssue({ code: "custom", path: ["entityId"], message: "Choose a live problem to update or remove." });
+  }
+});
+
+export const reviewChangeRequestSchema = z.object({
+  requestId: z.string().min(1),
+  status: z.enum(ChangeRequestStatus).refine(
+    (status) => status === ChangeRequestStatus.APPROVED || status === ChangeRequestStatus.REJECTED,
+    "Choose approve or reject.",
+  ),
+  rejectionReason: optionalText(500),
+}).superRefine((values, ctx) => {
+  if (values.status === ChangeRequestStatus.REJECTED && !values.rejectionReason) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["rejectionReason"],
+      message: "Add a short reason before rejecting a request.",
+    });
+  }
+});
 
 export const dailyCheckinSchema = z.object({
   targetMinutes: z.coerce.number().min(15).max(720),

@@ -134,6 +134,24 @@ enum BadgeRarity {
   LEGENDARY
 }
 
+enum ChangeRequestEntityType {
+  TOPIC
+  ROADMAP_ITEM
+  PROBLEM
+}
+
+enum ChangeRequestOperationType {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id               String                @id @default(cuid())
   email            String                @unique
@@ -176,6 +194,9 @@ model User {
   userBadges       UserBadge[]
   codeDrafts       CodeDraft[]
   codeSubmissions  CodeSubmission[]
+  requestedChangeRequests ChangeRequest[] @relation("ChangeRequestRequester")
+  reviewedChangeRequests  ChangeRequest[] @relation("ChangeRequestReviewer")
+  changeRequestReviews    ChangeRequestReview[]
 
   @@index([role, isFeatured])
   @@index([status, role])
@@ -269,12 +290,15 @@ model Topic {
   estimatedHours        Int
   icon                  String
   accentColor           String
+  isArchived            Boolean         @default(false)
+  archivedAt            DateTime?
   problems              Problem[]
   weakStudents          StudentWeakTopic[]
   progress              Progress[]
   communityPosts        CommunityPost[]
+  roadmapItems          RoadmapItem[]
 
-  @@index([level, sortOrder])
+  @@index([level, sortOrder, isArchived])
 }
 
 model Problem {
@@ -296,6 +320,8 @@ model Problem {
   codeExecutionEnabled Boolean         @default(false)
   starterCode       String?
   starterLanguage   CodeLanguage       @default(TYPESCRIPT)
+  isArchived        Boolean            @default(false)
+  archivedAt        DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   topic             Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
@@ -307,8 +333,27 @@ model Problem {
   codeDrafts        CodeDraft[]
   codeSubmissions   CodeSubmission[]
 
-  @@index([topicId, difficulty])
+  @@index([topicId, difficulty, isArchived])
   @@index([isFeatured, frequency])
+}
+
+model RoadmapItem {
+  id          String       @id @default(cuid())
+  title       String
+  slug        String       @unique
+  level       RoadmapLevel
+  summary     String
+  details     String
+  sortOrder   Int
+  topicId     String?
+  isArchived  Boolean      @default(false)
+  archivedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  topic       Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([level, sortOrder, isArchived])
+  @@index([topicId, isArchived])
 }
 
 model ProblemCompanyTag {
@@ -671,4 +716,42 @@ model CompanyContent {
   company   CompanyProfile     @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, category, createdAt])
+}
+
+model ChangeRequest {
+  id              String                     @id @default(cuid())
+  entityType      ChangeRequestEntityType
+  operationType   ChangeRequestOperationType
+  status          ChangeRequestStatus       @default(PENDING)
+  entityId        String?
+  summary         String
+  requestedData   Json
+  currentData     Json?
+  rejectionReason String?
+  requestedById   String
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  requestedBy     User                      @relation("ChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy      User?                     @relation("ChangeRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviews         ChangeRequestReview[]
+
+  @@index([status, entityType, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([entityType, entityId])
+}
+
+model ChangeRequestReview {
+  id           String              @id @default(cuid())
+  requestId    String
+  reviewerId   String
+  status       ChangeRequestStatus
+  note         String?
+  createdAt    DateTime            @default(now())
+  request      ChangeRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewer     User                @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@index([reviewerId, createdAt])
 }

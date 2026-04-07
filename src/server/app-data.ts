@@ -2,7 +2,7 @@ import "server-only";
 
 import { addDays, format, startOfDay, subDays } from "date-fns";
 
-import { Role, SubmissionState } from "@/generated/prisma/enums";
+import { ChangeRequestStatus, Role, SubmissionState } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 
 function buildHeatmap(checkins: Array<{ date: Date; minutesCommitted: number; solvedCount: number }>) {
@@ -294,7 +294,7 @@ export async function getCompanyPortalData(userId: string) {
 }
 
 export async function getAdminPanelData() {
-  const [users, mentors, companies, problems, topics, badges, reportedPosts] = await Promise.all([
+  const [users, mentors, companies, problems, topics, badges, reportedPosts, pendingChangeRequests] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.mentorProfile.findMany({
       where: {
@@ -313,7 +313,10 @@ export async function getAdminPanelData() {
       where: { isReported: true },
       include: { author: true, topic: true, company: true },
     }),
+    prisma.changeRequest.count({
+      where: { status: ChangeRequestStatus.PENDING },
+    }),
   ]);
 
-  return { users, mentors, companies, problems, topics, badges, reportedPosts };
+  return { users, mentors, companies, problems, topics, badges, reportedPosts, pendingChangeRequests };
 }

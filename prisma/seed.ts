@@ -20,6 +20,7 @@ import {
   companySeed,
   mentorPostSeed,
   mentorSeed,
+  roadmapItemSeed,
   topicSeed,
 } from "../src/data/platform-content";
 import { problemChallengeSeed } from "../src/data/problem-challenges";
@@ -98,6 +99,8 @@ type SeedStudent = {
 };
 
 async function clearDatabase() {
+  await prisma.changeRequestReview.deleteMany();
+  await prisma.changeRequest.deleteMany();
   await prisma.postLike.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.communityPost.deleteMany();
@@ -122,6 +125,7 @@ async function clearDatabase() {
   await prisma.companyContent.deleteMany();
   await prisma.studentTargetCompany.deleteMany();
   await prisma.studentWeakTopic.deleteMany();
+  await prisma.roadmapItem.deleteMany();
   await prisma.problem.deleteMany();
   await prisma.topic.deleteMany();
   await prisma.mentorProfile.deleteMany();
@@ -235,6 +239,20 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
       },
     });
     topicMap.set(topic.slug, created.id);
+  }
+
+  for (const roadmapItem of roadmapItemSeed) {
+    await prisma.roadmapItem.create({
+      data: {
+        title: roadmapItem.title,
+        slug: roadmapItem.slug,
+        level: roadmapItem.level,
+        summary: roadmapItem.summary,
+        details: roadmapItem.details,
+        sortOrder: roadmapItem.sortOrder,
+        topicId: topicMap.get(roadmapItem.topicSlug),
+      },
+    });
   }
 
   const companyMap = new Map<string, string>();
