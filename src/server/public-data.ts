@@ -2,6 +2,7 @@ import "server-only";
 
 import { CodeLanguage, Difficulty, Role, SubmissionState } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards";
 
 const problemDetailBaseSelect = {
   id: true,
@@ -262,56 +263,72 @@ async function getCodeWorkspaceRecords(input: {
 }
 
 export async function getLandingPageData() {
-  const [featuredCompanies, featuredMentors, topStudents, featuredChallenges, wallPosts] =
-    await Promise.all([
-      prisma.companyProfile.findMany({
-        where: { featured: true },
-        orderBy: { name: "asc" },
-        take: 6,
-      }),
-      prisma.mentorProfile.findMany({
-        where: { featured: true, user: { role: Role.MENTOR } },
-        include: {
-          user: true,
-          company: true,
-          followers: true,
-          mentorPosts: { take: 2, orderBy: { createdAt: "desc" } },
-        },
-        take: 4,
-      }),
-      prisma.user.findMany({
-        where: { role: Role.STUDENT },
-        include: {
-          studentProfile: true,
-          streak: true,
-        },
-        orderBy: {
-          studentProfile: {
-            commitmentScore: "desc",
+  try {
+    const [featuredCompanies, featuredMentors, topStudents, featuredChallenges, wallPosts] =
+      await Promise.all([
+        prisma.companyProfile.findMany({
+          where: { featured: true },
+          orderBy: { name: "asc" },
+          take: 6,
+        }),
+        prisma.mentorProfile.findMany({
+          where: { featured: true, user: { role: Role.MENTOR } },
+          include: {
+            user: true,
+            company: true,
+            followers: true,
+            mentorPosts: { take: 2, orderBy: { createdAt: "desc" } },
           },
-        },
-        take: 6,
-      }),
-      prisma.challenge.findMany({
-        where: { isFeatured: true },
-        orderBy: { durationDays: "asc" },
-        take: 2,
-      }),
-      prisma.commitmentPost.findMany({
-        where: { isPublic: true },
-        include: { user: true },
-        orderBy: { createdAt: "desc" },
-        take: 5,
-      }),
-    ]);
+          take: 4,
+        }),
+        prisma.user.findMany({
+          where: { role: Role.STUDENT },
+          include: {
+            studentProfile: true,
+            streak: true,
+          },
+          orderBy: {
+            studentProfile: {
+              commitmentScore: "desc",
+            },
+          },
+          take: 6,
+        }),
+        prisma.challenge.findMany({
+          where: { isFeatured: true },
+          orderBy: { durationDays: "asc" },
+          take: 2,
+        }),
+        prisma.commitmentPost.findMany({
+          where: { isPublic: true },
+          include: { user: true },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        }),
+      ]);
 
-  return {
-    featuredCompanies,
-    featuredMentors,
-    topStudents,
-    featuredChallenges,
-    wallPosts,
-  };
+    return {
+      featuredCompanies,
+      featuredMentors,
+      topStudents,
+      featuredChallenges,
+      wallPosts,
+    };
+  } catch (error) {
+    logServerError("getLandingPageData", error);
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return {
+      featuredCompanies: [],
+      featuredMentors: [],
+      topStudents: [],
+      featuredChallenges: [],
+      wallPosts: [],
+    };
+  }
 }
 
 export async function getRoadmapData() {
@@ -337,6 +354,12 @@ export async function getRoadmapData() {
 
     return buildRoadmapGroups(items);
   } catch (error) {
+    logServerError("getRoadmapData", error);
+
+    if (isRecoverableRuntimeError(error) && !isApprovalWorkflowSchemaError(error)) {
+      return buildRoadmapGroups([]);
+    }
+
     if (!isApprovalWorkflowSchemaError(error)) {
       throw error;
     }
@@ -357,6 +380,12 @@ export async function getTopicsList() {
       orderBy: [{ level: "asc" }, { sortOrder: "asc" }],
     });
   } catch (error) {
+    logServerError("getTopicsList", error);
+
+    if (isRecoverableRuntimeError(error) && !isApprovalWorkflowSchemaError(error)) {
+      return [];
+    }
+
     if (!isApprovalWorkflowSchemaError(error)) {
       throw error;
     }
@@ -385,6 +414,12 @@ export async function getTopicBySlug(slug: string) {
       },
     });
   } catch (error) {
+    logServerError("getTopicBySlug", error, { slug });
+
+    if (isRecoverableRuntimeError(error) && !isApprovalWorkflowSchemaError(error)) {
+      return null;
+    }
+
     if (!isApprovalWorkflowSchemaError(error)) {
       throw error;
     }
@@ -441,6 +476,12 @@ export async function getProblemsList(filters?: {
       orderBy: [{ frequency: "desc" }, { difficulty: "asc" }, { title: "asc" }],
     });
   } catch (error) {
+    logServerError("getProblemsList", error, filters);
+
+    if (isRecoverableRuntimeError(error) && !isApprovalWorkflowSchemaError(error)) {
+      return [];
+    }
+
     if (!isApprovalWorkflowSchemaError(error)) {
       throw error;
     }
@@ -461,269 +502,362 @@ export async function getProblemsList(filters?: {
 }
 
 export async function getProblemById(id: string, userId?: string) {
-  const [{ problem, workspaceSchemaAvailable, archiveSchemaAvailable }, submission, bookmark, revision] =
-    await Promise.all([
-    getProblemRecord(id),
-    userId
-      ? prisma.submissionStatus.findUnique({
-          where: { userId_problemId: { userId, problemId: id } },
-        })
-      : null,
-    userId
-      ? prisma.bookmark.findUnique({
-          where: { userId_problemId: { userId, problemId: id } },
-        })
-      : null,
-    userId
-      ? prisma.revisionQueue.findUnique({
-          where: { userId_problemId: { userId, problemId: id } },
-        })
-      : null,
-    ]);
+  try {
+    const [{ problem, workspaceSchemaAvailable, archiveSchemaAvailable }, submission, bookmark, revision] =
+      await Promise.all([
+        getProblemRecord(id),
+        userId
+          ? prisma.submissionStatus.findUnique({
+              where: { userId_problemId: { userId, problemId: id } },
+            })
+          : null,
+        userId
+          ? prisma.bookmark.findUnique({
+              where: { userId_problemId: { userId, problemId: id } },
+            })
+          : null,
+        userId
+          ? prisma.revisionQueue.findUnique({
+              where: { userId_problemId: { userId, problemId: id } },
+            })
+          : null,
+      ]);
 
-  if (!problem) {
-    return null;
-  }
+    if (!problem) {
+      return null;
+    }
 
-  const normalizedProblem = {
-    ...getFallbackProblemWorkspaceState(),
-    ...problem,
-  };
+    const normalizedProblem = {
+      ...getFallbackProblemWorkspaceState(),
+      ...problem,
+    };
 
-  const { codeDrafts, codeSubmissions } = await getCodeWorkspaceRecords({
-    userId,
-    problemId: id,
-    workspaceSchemaAvailable,
-  });
+    const { codeDrafts, codeSubmissions } = await getCodeWorkspaceRecords({
+      userId,
+      problemId: id,
+      workspaceSchemaAvailable,
+    });
 
-  const similarProblems = normalizedProblem.similarProblemSlugs.length
-    ? await prisma.problem.findMany({
-        where: {
-          ...(archiveSchemaAvailable ? { isArchived: false } : {}),
-          slug: { in: normalizedProblem.similarProblemSlugs },
-        },
-        select: {
-          id: true,
-          title: true,
-          topic: {
-            select: {
-              name: true,
+    const similarProblems = normalizedProblem.similarProblemSlugs.length
+      ? await prisma.problem.findMany({
+          where: {
+            ...(archiveSchemaAvailable ? { isArchived: false } : {}),
+            slug: { in: normalizedProblem.similarProblemSlugs },
+          },
+          select: {
+            id: true,
+            title: true,
+            topic: {
+              select: {
+                name: true,
+              },
             },
           },
+        })
+      : [];
+
+    return {
+      problem: normalizedProblem,
+      similarProblems,
+      submissionStatus: submission ?? null,
+      isBookmarked: Boolean(bookmark),
+      inRevisionQueue: Boolean(revision),
+      codeDrafts,
+      latestCodeSubmissions: codeSubmissions.reduce<Array<(typeof codeSubmissions)[number]>>(
+        (accumulator, submissionItem) => {
+          if (!accumulator.some((existing) => existing.language === submissionItem.language)) {
+            accumulator.push(submissionItem);
+          }
+
+          return accumulator;
         },
-      })
-    : [];
+        [],
+      ),
+    };
+  } catch (error) {
+    logServerError("getProblemById", error, { id, userId });
 
-  return {
-    problem: normalizedProblem,
-    similarProblems,
-    submissionStatus: submission ?? null,
-    isBookmarked: Boolean(bookmark),
-    inRevisionQueue: Boolean(revision),
-    codeDrafts,
-    latestCodeSubmissions: codeSubmissions.reduce<Array<(typeof codeSubmissions)[number]>>(
-      (accumulator, submissionItem) => {
-        if (!accumulator.some((existing) => existing.language === submissionItem.language)) {
-          accumulator.push(submissionItem);
-        }
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
 
-        return accumulator;
-      },
-      [],
-    ),
-  };
+    return null;
+  }
 }
 
 export async function getCompaniesList() {
-  return prisma.companyProfile.findMany({
-    include: {
-      mentors: {
-        where: {
-          user: {
-            role: Role.MENTOR,
+  try {
+    return await prisma.companyProfile.findMany({
+      include: {
+        mentors: {
+          where: {
+            user: {
+              role: Role.MENTOR,
+            },
           },
+          include: { user: true },
         },
-        include: { user: true },
+        problemTags: { include: { problem: true } },
+        roles: true,
+        contents: true,
       },
-      problemTags: { include: { problem: true } },
-      roles: true,
-      contents: true,
-    },
-    orderBy: [{ featured: "desc" }, { name: "asc" }],
-  });
+      orderBy: [{ featured: "desc" }, { name: "asc" }],
+    });
+  } catch (error) {
+    logServerError("getCompaniesList", error);
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return [];
+  }
 }
 
 export async function getCompanyBySlug(slug: string) {
-  return prisma.companyProfile.findUnique({
-    where: { slug },
-    include: {
-      mentors: {
-        where: {
-          user: {
-            role: Role.MENTOR,
-          },
-        },
-        include: {
-          user: true,
-        },
-      },
-      problemTags: {
-        include: {
-          problem: {
-            include: {
-              topic: true,
+  try {
+    return await prisma.companyProfile.findUnique({
+      where: { slug },
+      include: {
+        mentors: {
+          where: {
+            user: {
+              role: Role.MENTOR,
             },
           },
+          include: {
+            user: true,
+          },
         },
-        orderBy: { frequency: "desc" },
+        problemTags: {
+          include: {
+            problem: {
+              include: {
+                topic: true,
+              },
+            },
+          },
+          orderBy: { frequency: "desc" },
+        },
+        roles: true,
+        contents: true,
       },
-      roles: true,
-      contents: true,
-    },
-  });
+    });
+  } catch (error) {
+    logServerError("getCompanyBySlug", error, { slug });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return null;
+  }
 }
 
 export async function getMentorsList() {
-  return prisma.mentorProfile.findMany({
-    where: {
-      user: {
-        role: Role.MENTOR,
+  try {
+    return await prisma.mentorProfile.findMany({
+      where: {
+        user: {
+          role: Role.MENTOR,
+        },
       },
-    },
-    include: {
-      user: true,
-      company: true,
-      followers: true,
-      mentorPosts: {
-        orderBy: { createdAt: "desc" },
-        take: 2,
+      include: {
+        user: true,
+        company: true,
+        followers: true,
+        mentorPosts: {
+          orderBy: { createdAt: "desc" },
+          take: 2,
+        },
       },
-    },
-    orderBy: [{ featured: "desc" }, { experienceYears: "desc" }],
-  });
+      orderBy: [{ featured: "desc" }, { experienceYears: "desc" }],
+    });
+  } catch (error) {
+    logServerError("getMentorsList", error);
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return [];
+  }
 }
 
 export async function getMentorBySlug(slug: string, studentId?: string) {
-  const mentor = await prisma.mentorProfile.findFirst({
-    where: {
-      user: {
-        role: Role.MENTOR,
-        slug,
+  try {
+    const mentor = await prisma.mentorProfile.findFirst({
+      where: {
+        user: {
+          role: Role.MENTOR,
+          slug,
+        },
       },
-    },
-    include: {
-      user: true,
-      company: true,
-      followers: true,
-      mentorPosts: {
-        orderBy: { createdAt: "desc" },
-      },
-      questions: {
-        include: {
-          student: {
-            include: {
-              user: true,
+      include: {
+        user: true,
+        company: true,
+        followers: true,
+        mentorPosts: {
+          orderBy: { createdAt: "desc" },
+        },
+        questions: {
+          include: {
+            student: {
+              include: {
+                user: true,
+              },
             },
           },
+          orderBy: { createdAt: "desc" },
+          take: 8,
         },
-        orderBy: { createdAt: "desc" },
-        take: 8,
       },
-    },
-  });
+    });
 
-  if (!mentor) {
+    if (!mentor) {
+      return null;
+    }
+
+    const isFollowing = studentId
+      ? await prisma.mentorFollower.findFirst({
+          where: { mentorId: mentor.userId, studentId },
+        })
+      : null;
+
+    const recommendedProblems = mentor.mentorPosts.length
+      ? await prisma.problem.findMany({
+          where: {
+            slug: {
+              in: mentor.mentorPosts.flatMap((post) => post.recommendedProblemSlugs),
+            },
+          },
+          include: {
+            topic: true,
+            companyTags: { include: { company: true } },
+          },
+        })
+      : [];
+
+    return {
+      mentor,
+      isFollowing: Boolean(isFollowing),
+      recommendedProblems,
+    };
+  } catch (error) {
+    logServerError("getMentorBySlug", error, { slug, studentId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
     return null;
   }
-
-  const isFollowing = studentId
-    ? await prisma.mentorFollower.findFirst({
-        where: { mentorId: mentor.userId, studentId },
-      })
-    : null;
-
-  const recommendedProblems = mentor.mentorPosts.length
-    ? await prisma.problem.findMany({
-        where: {
-          slug: {
-            in: mentor.mentorPosts.flatMap((post) => post.recommendedProblemSlugs),
-          },
-        },
-        include: {
-          topic: true,
-          companyTags: { include: { company: true } },
-        },
-      })
-    : [];
-
-  return {
-    mentor,
-    isFollowing: Boolean(isFollowing),
-    recommendedProblems,
-  };
 }
 
 export async function getCommunityFeed() {
-  return prisma.communityPost.findMany({
-    include: {
-      author: true,
-      topic: true,
-      company: true,
-      comments: {
-        include: {
-          author: true,
+  try {
+    return await prisma.communityPost.findMany({
+      include: {
+        author: true,
+        topic: true,
+        company: true,
+        comments: {
+          include: {
+            author: true,
+          },
+          orderBy: { createdAt: "asc" },
         },
-        orderBy: { createdAt: "asc" },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (error) {
+    logServerError("getCommunityFeed", error);
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return [];
+  }
 }
 
 export async function getCatalogMeta() {
-  const [topics, companies] = await Promise.all([
-    prisma.topic
-      .findMany({ where: { isArchived: false }, orderBy: { sortOrder: "asc" } })
-      .catch((error) => {
-        if (!isApprovalWorkflowSchemaError(error)) {
-          throw error;
-        }
+  try {
+    const [topics, companies] = await Promise.all([
+      prisma.topic
+        .findMany({ where: { isArchived: false }, orderBy: { sortOrder: "asc" } })
+        .catch((error) => {
+          if (!isApprovalWorkflowSchemaError(error)) {
+            throw error;
+          }
 
-        return prisma.topic.findMany({ orderBy: { sortOrder: "asc" } });
-      }),
-    prisma.companyProfile.findMany({ orderBy: { name: "asc" } }),
-  ]);
+          return prisma.topic.findMany({ orderBy: { sortOrder: "asc" } });
+        }),
+      prisma.companyProfile.findMany({ orderBy: { name: "asc" } }),
+    ]);
 
-  return { topics, companies };
+    return { topics, companies };
+  } catch (error) {
+    logServerError("getCatalogMeta", error);
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return { topics: [], companies: [] };
+  }
 }
 
 export async function getLeaderboard() {
-  return prisma.user.findMany({
-    where: { role: Role.STUDENT },
-    include: {
-      studentProfile: true,
-      streak: true,
-    },
-    orderBy: [
-      { studentProfile: { commitmentScore: "desc" } },
-      { studentProfile: { weeklyConsistencyScore: "desc" } },
-      { studentProfile: { questionsSolvedCount: "desc" } },
-    ],
-    take: 12,
-  });
+  try {
+    return await prisma.user.findMany({
+      where: { role: Role.STUDENT },
+      include: {
+        studentProfile: true,
+        streak: true,
+      },
+      orderBy: [
+        { studentProfile: { commitmentScore: "desc" } },
+        { studentProfile: { weeklyConsistencyScore: "desc" } },
+        { studentProfile: { questionsSolvedCount: "desc" } },
+      ],
+      take: 12,
+    });
+  } catch (error) {
+    logServerError("getLeaderboard", error);
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return [];
+  }
 }
 
 export async function getStudentProblemState(userId: string) {
-  const states = await prisma.submissionStatus.findMany({
-    where: { userId },
-  });
+  try {
+    const states = await prisma.submissionStatus.findMany({
+      where: { userId },
+    });
 
-  return {
-    solved: new Set(
-      states.filter((state) => state.status === SubmissionState.SOLVED).map((state) => state.problemId),
-    ),
-    attempted: new Set(
-      states.filter((state) => state.status === SubmissionState.ATTEMPTED).map((state) => state.problemId),
-    ),
-  };
+    return {
+      solved: new Set(
+        states.filter((state) => state.status === SubmissionState.SOLVED).map((state) => state.problemId),
+      ),
+      attempted: new Set(
+        states.filter((state) => state.status === SubmissionState.ATTEMPTED).map((state) => state.problemId),
+      ),
+    };
+  } catch (error) {
+    logServerError("getStudentProblemState", error, { userId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return {
+      solved: new Set<string>(),
+      attempted: new Set<string>(),
+    };
+  }
 }

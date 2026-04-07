@@ -3,6 +3,7 @@ import "server-only";
 import { Role, UserPortal, UserStatus } from "@/generated/prisma/enums";
 import { normalizeAccessGrants } from "@/lib/access-control";
 import { AUTH_COOKIE_NAME, SESSION_DURATION_DAYS } from "@/lib/constants";
+import { isMissingAuthConfigurationError, logServerError } from "@/lib/runtime-guards";
 import { cookies } from "next/headers";
 import { jwtVerify, SignJWT } from "jose";
 
@@ -28,24 +29,29 @@ function getSecret() {
 }
 
 export async function createSession(payload: SessionPayload) {
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
+  try {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS);
 
-  const token = await new SignJWT(payload)
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(`${SESSION_DURATION_DAYS}d`)
-    .sign(getSecret());
+    const token = await new SignJWT(payload)
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(`${SESSION_DURATION_DAYS}d`)
+      .sign(getSecret());
 
-  const cookieStore = await cookies();
+    const cookieStore = await cookies();
 
-  cookieStore.set(AUTH_COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: expiresAt,
-  });
+    cookieStore.set(AUTH_COOKIE_NAME, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      expires: expiresAt,
+    });
+  } catch (error) {
+    logServerError("createSession", error);
+    throw error;
+  }
 }
 
 export async function clearSession() {
@@ -79,7 +85,11 @@ export async function getSession() {
       passwordResetRequired: session.passwordResetRequired ?? false,
       sessionVersion: session.sessionVersion ?? 0,
     } satisfies SessionPayload;
-  } catch {
+  } catch (error) {
+    if (isMissingAuthConfigurationError(error)) {
+      logServerError("getSession", error);
+    }
+
     return null;
   }
 }

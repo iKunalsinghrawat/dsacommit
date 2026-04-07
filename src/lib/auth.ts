@@ -3,6 +3,7 @@ import "server-only";
 import { Role, UserPortal, UserStatus } from "@/generated/prisma/enums";
 import { getHomeForAccess, hasPortalAccess, isRestrictedStatus, normalizeAccessGrants } from "@/lib/access-control";
 import { prisma } from "@/lib/prisma";
+import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards";
 import { clearSession, getSession, type SessionPayload } from "@/lib/session";
 import { redirect } from "next/navigation";
 
@@ -35,27 +36,40 @@ export async function getCurrentUser() {
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
-    include: {
-      studentProfile: {
-        include: {
-          targetCompanies: { include: { company: true } },
-          weakTopics: { include: { topic: true } },
-          mentorFollows: true,
+  let user;
+
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: {
+        studentProfile: {
+          include: {
+            targetCompanies: { include: { company: true } },
+            weakTopics: { include: { topic: true } },
+            mentorFollows: true,
+          },
         },
-      },
-      mentorProfile: {
-        include: {
-          company: true,
-          followers: true,
+        mentorProfile: {
+          include: {
+            company: true,
+            followers: true,
+          },
         },
+        ownedCompany: true,
+        streak: true,
+        userBadges: { include: { badge: true } },
       },
-      ownedCompany: true,
-      streak: true,
-      userBadges: { include: { badge: true } },
-    },
-  });
+    });
+  } catch (error) {
+    logServerError("getCurrentUser", error, { userId: session.userId });
+
+    if (isRecoverableRuntimeError(error)) {
+      await clearSession();
+      return null;
+    }
+
+    throw error;
+  }
 
   if (!user) {
     await clearSession();

@@ -24,7 +24,20 @@ export default async function DashboardPage() {
   const data = await getDashboardData(user.id, user.role);
 
   if (!data) {
-    return null;
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Dashboard data is temporarily unavailable."
+          description="We could not load your live progress right now. Your account shell is still available while the runtime connection is checked."
+        />
+        <Card className="glass-panel-strong">
+          <CardContent className="p-6 text-sm leading-7 text-muted">
+            Try refreshing in a moment. If this keeps happening, verify your runtime environment variables and database migration state.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (user.role === Role.MENTOR && "mentorProfile" in data) {
@@ -93,7 +106,7 @@ export default async function DashboardPage() {
             <CardDescription>Published company posts</CardDescription>
           </Card>
           <Card>
-            <CardTitle>{data.topStudents.length}</CardTitle>
+            <CardTitle>{data.topStudents?.length ?? 0}</CardTitle>
             <CardDescription>Students targeting your company</CardDescription>
           </Card>
         </div>

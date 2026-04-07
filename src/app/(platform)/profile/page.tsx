@@ -17,7 +17,20 @@ export default async function ProfilePage() {
   const [profile, meta] = await Promise.all([getProfileData(user.id), getCatalogMeta()]);
 
   if (!profile) {
-    return null;
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Profile"
+          title="Profile data is temporarily unavailable."
+          description="The app could not load your saved profile details right now, but your session is still active."
+        />
+        <Card className="glass-panel-strong">
+          <CardContent className="p-6 text-sm leading-7 text-muted">
+            Refresh after checking runtime configuration or database connectivity. Once the data source is available again, your profile view will return automatically.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
