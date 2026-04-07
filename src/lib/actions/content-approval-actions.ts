@@ -360,7 +360,7 @@ export async function reviewChangeRequestAction(formData: FormData): Promise<Act
   const parsed = reviewChangeRequestSchema.safeParse({
     requestId: formData.get("requestId"),
     status: formData.get("status"),
-    rejectionReason: formData.get("rejectionReason"),
+    rejectionReason: String(formData.get("rejectionReason") ?? ""),
   });
 
   if (!parsed.success) {
