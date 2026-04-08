@@ -377,10 +377,7 @@ export function CommunicationRealtimeProvider({
         break;
     }
 
-    if (
-      pathname.startsWith("/messages") ||
-      pathname.startsWith("/groups/")
-    ) {
+    if (pathname.startsWith("/groups/")) {
       if (
         event.type === "message:new" ||
         event.type === "conversation:update" ||

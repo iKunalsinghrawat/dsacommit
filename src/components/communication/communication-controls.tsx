@@ -1,6 +1,20 @@
 "use client";
 
-import { Check, Loader2, LogOut, MessageSquareText, ShieldBan, ShieldCheck, Trash2, UserMinus, UserPlus, X } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  LogOut,
+  MessageSquareText,
+  Paperclip,
+  SendHorizontal,
+  ShieldBan,
+  ShieldCheck,
+  SmilePlus,
+  Trash2,
+  UserMinus,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
@@ -28,6 +42,7 @@ import {
 
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type ServerActionRunner = (formData: FormData) => Promise<CommunicationActionState>;
 
@@ -395,30 +410,70 @@ export function NotificationReadButton({
 export function MessageComposer({
   conversationId,
   disabledReason,
+  helperText,
+  placeholder,
+  refreshOnSuccess = true,
+  variant = "default",
 }: {
   conversationId: string;
   disabledReason?: string | null;
+  helperText?: string;
+  placeholder?: string;
+  refreshOnSuccess?: boolean;
+  variant?: "default" | "chat";
 }) {
   const router = useRouter();
   const [content, setContent] = useState("");
   const [isPending, startTransition] = useTransition();
+  const isChatVariant = variant === "chat";
+  const resolvedPlaceholder =
+    disabledReason ??
+    placeholder ??
+    "Keep it crisp. Ask the real blocker or share the next step.";
+  const resolvedHelperText =
+    disabledReason ??
+    helperText ??
+    "Messages are stored with timestamps and read state tracking.";
 
   return (
-    <div className="space-y-3">
+    <div
+      className={cn(
+        "space-y-3",
+        isChatVariant &&
+          "rounded-[26px] border border-border/70 bg-background/95 p-3 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]",
+      )}
+    >
       <Textarea
         disabled={Boolean(disabledReason) || isPending}
+        className={cn(
+          isChatVariant &&
+            "min-h-[3.5rem] border-none bg-transparent px-0 py-2 shadow-none focus-visible:ring-0",
+        )}
         onChange={(event) => setContent(event.target.value)}
-        placeholder={
-          disabledReason
-            ? disabledReason
-            : "Keep it crisp. Ask the real blocker or share the next step."
-        }
+        placeholder={resolvedPlaceholder}
         value={content}
       />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs leading-6 text-muted">
-          {disabledReason ?? "Messages are stored with timestamps and read state tracking."}
-        </p>
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3",
+          isChatVariant && "gap-2",
+        )}
+      >
+        {isChatVariant ? (
+          <div className="flex items-center gap-1">
+            <Button disabled size="icon" type="button" variant="ghost">
+              <SmilePlus className="size-4" />
+            </Button>
+            <Button disabled size="icon" type="button" variant="ghost">
+              <Paperclip className="size-4" />
+            </Button>
+            <p className="hidden text-xs leading-6 text-muted sm:block">
+              {resolvedHelperText}
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs leading-6 text-muted">{resolvedHelperText}</p>
+        )}
         <Button
           disabled={Boolean(disabledReason) || isPending || content.trim().length === 0}
           onClick={() => {
@@ -435,13 +490,23 @@ export function MessageComposer({
 
               setContent("");
               toast.success(result.message ?? "Message sent.");
-              router.refresh();
+
+              if (refreshOnSuccess) {
+                router.refresh();
+              }
             });
           }}
+          size={isChatVariant ? "icon" : "default"}
           type="button"
         >
-          {isPending ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareText className="size-4" />}
-          {isPending ? "Sending..." : "Send message"}
+          {isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : isChatVariant ? (
+            <SendHorizontal className="size-4" />
+          ) : (
+            <MessageSquareText className="size-4" />
+          )}
+          {isChatVariant ? null : isPending ? "Sending..." : "Send message"}
         </Button>
       </div>
     </div>

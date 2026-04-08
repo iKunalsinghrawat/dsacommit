@@ -39,6 +39,12 @@ import {
 import { useCommunicationRealtimeSubscription } from "@/components/communication/communication-realtime-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  describeSignalingState,
+  shouldApplyRemoteAnswer,
+  shouldApplyRemoteOffer,
+  shouldCreateLocalOffer,
+} from "@/lib/call-signaling";
 
 export type CallSummary = {
   id: string;
@@ -92,6 +98,25 @@ function getRemoteParticipant(
   currentUserId: string,
 ) {
   return activeCall?.participants.find((participant) => participant.userId !== currentUserId) ?? null;
+}
+
+function logCallDebug(
+  message: string,
+  metadata?: Record<string, unknown>,
+  level: "info" | "warn" | "error" = "info",
+) {
+  if (process.env.NODE_ENV === "test") {
+    return;
+  }
+
+  const logger =
+    level === "warn"
+      ? console.warn
+      : level === "error"
+        ? console.error
+        : console.info;
+
+  logger("[LiveCallControls]", message, metadata ?? {});
 }
 
 function describeCallState(input: {
@@ -192,7 +217,7 @@ export function LiveCallControls({
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const readyParticipantIdsRef = useRef(new Set<string>());
   const readySentForCallRef = useRef<string | null>(null);
-  const offerSentForCallRef = useRef<string | null>(null);
+  const awaitingAnswerRef = useRef(false);
   const bootstrappedSignalsForCallRef = useRef<string | null>(null);
   const lastSignalAtRef = useRef<string | null>(null);
   const callIdRef = useRef<string | null>(activeCall?.id ?? null);
@@ -242,17 +267,27 @@ export function LiveCallControls({
       pendingIceCandidatesRef.current = [];
       readyParticipantIdsRef.current.clear();
       readySentForCallRef.current = null;
-      offerSentForCallRef.current = null;
+      awaitingAnswerRef.current = false;
       bootstrappedSignalsForCallRef.current = null;
       lastSignalAtRef.current = null;
       processedSignalIdsRef.current.clear();
 
       const peerConnection = peerConnectionRef.current;
       if (peerConnection) {
+        logCallDebug("Destroying peer connection.", {
+          callSessionId: callIdRef.current,
+          state: describeSignalingState({
+            signalingState: peerConnection.signalingState,
+            connectionState: peerConnection.connectionState,
+            iceConnectionState: peerConnection.iceConnectionState,
+          }),
+          keepLocalStream: options?.keepLocalStream ?? false,
+        });
         peerConnection.onicecandidate = null;
         peerConnection.ontrack = null;
         peerConnection.onconnectionstatechange = null;
         peerConnection.oniceconnectionstatechange = null;
+        peerConnection.onsignalingstatechange = null;
         peerConnection.close();
       }
 
@@ -297,6 +332,11 @@ export function LiveCallControls({
         return null;
       }
 
+      logCallDebug("Sending signaling event.", {
+        callSessionId: activeCallId,
+        type,
+      });
+
       const response = await fetch(`/api/calls/${activeCallId}/signals`, {
         method: "POST",
         headers: {
@@ -323,6 +363,18 @@ export function LiveCallControls({
       ) {
         lastSignalAtRef.current = result.signal.createdAt;
       }
+
+      logCallDebug("Signaling event persisted.", {
+        callSessionId: activeCallId,
+        type,
+        signalId:
+          result.signal &&
+          typeof result.signal === "object" &&
+          "id" in result.signal &&
+          typeof result.signal.id === "string"
+            ? result.signal.id
+            : null,
+      });
 
       return result.signal ?? null;
     },
@@ -379,11 +431,19 @@ export function LiveCallControls({
     }
 
     const peerConnection = new RTCPeerConnection(getWebRtcConfiguration());
+    logCallDebug("Created peer connection.", {
+      callSessionId: callIdRef.current,
+    });
 
     peerConnection.onicecandidate = (event) => {
       if (!event.candidate) {
         return;
       }
+
+      logCallDebug("Generated ICE candidate.", {
+        callSessionId: callIdRef.current,
+        candidate: event.candidate.candidate,
+      });
 
       void sendSignal(
         SignalingEventType.ICE_CANDIDATE,
@@ -404,6 +464,10 @@ export function LiveCallControls({
     };
 
     peerConnection.ontrack = (event) => {
+      logCallDebug("Received remote media track.", {
+        callSessionId: callIdRef.current,
+        kind: event.track.kind,
+      });
       const nextRemoteStream =
         remoteStreamRef.current ??
         (typeof MediaStream !== "undefined" ? new MediaStream() : null);
@@ -428,16 +492,47 @@ export function LiveCallControls({
 
     peerConnection.onconnectionstatechange = () => {
       setPeerConnectionState(peerConnection.connectionState);
+      logCallDebug("Peer connection state changed.", {
+        callSessionId: callIdRef.current,
+        state: describeSignalingState({
+          signalingState: peerConnection.signalingState,
+          connectionState: peerConnection.connectionState,
+          iceConnectionState: peerConnection.iceConnectionState,
+        }),
+      });
 
       if (peerConnection.connectionState === "failed") {
         setMediaError("The live call connection failed. Try joining again.");
       }
+
+      if (peerConnection.connectionState === "connected") {
+        awaitingAnswerRef.current = false;
+      }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
+      logCallDebug("ICE connection state changed.", {
+        callSessionId: callIdRef.current,
+        state: describeSignalingState({
+          signalingState: peerConnection.signalingState,
+          connectionState: peerConnection.connectionState,
+          iceConnectionState: peerConnection.iceConnectionState,
+        }),
+      });
       if (peerConnection.iceConnectionState === "failed") {
         setMediaError("Unable to complete ICE negotiation for this call.");
       }
+    };
+
+    peerConnection.onsignalingstatechange = () => {
+      logCallDebug("Signaling state changed.", {
+        callSessionId: callIdRef.current,
+        state: describeSignalingState({
+          signalingState: peerConnection.signalingState,
+          connectionState: peerConnection.connectionState,
+          iceConnectionState: peerConnection.iceConnectionState,
+        }),
+      });
     };
 
     peerConnectionRef.current = peerConnection;
@@ -489,18 +584,30 @@ export function LiveCallControls({
 
     if (
       callerParticipant?.status !== CallParticipantStatus.JOINED ||
-      !recipientParticipant ||
-      !readyParticipantIdsRef.current.has(recipientParticipant.userId) ||
-      readySentForCallRef.current !== liveCall.id ||
-      offerSentForCallRef.current === liveCall.id ||
-      !localStreamRef.current
+      !recipientParticipant
     ) {
       return;
     }
 
     const peerConnection = ensurePeerConnection();
+    const offerDecision = shouldCreateLocalOffer({
+      currentUserId,
+      initiatedById: liveCall.initiatedById,
+      signalingState: peerConnection.signalingState,
+      connectionState: peerConnection.connectionState,
+      hasLocalStream: Boolean(localStreamRef.current),
+      hasRemoteStream: Boolean(remoteStreamRef.current?.getTracks().length),
+      hasRemoteReady: readyParticipantIdsRef.current.has(recipientParticipant.userId),
+      hasSentReady: readySentForCallRef.current === liveCall.id,
+      awaitingAnswer: awaitingAnswerRef.current,
+      currentParticipantStatus: callerParticipant?.status,
+    });
 
-    if (peerConnection.signalingState !== "stable") {
+    if (!offerDecision.ok) {
+      logCallDebug("Skipped local offer creation.", {
+        callSessionId: liveCall.id,
+        reason: offerDecision.reason,
+      });
       return;
     }
 
@@ -510,6 +617,11 @@ export function LiveCallControls({
       offerToReceiveVideo: liveCall.callType === CallType.VIDEO,
     });
     await peerConnection.setLocalDescription(offer);
+    awaitingAnswerRef.current = true;
+    logCallDebug("Created local offer.", {
+      callSessionId: liveCall.id,
+      signalingState: peerConnection.signalingState,
+    });
     await sendSignal(
       SignalingEventType.OFFER,
       peerConnection.localDescription?.toJSON
@@ -519,7 +631,6 @@ export function LiveCallControls({
             sdp: offer.sdp,
           },
     );
-    offerSentForCallRef.current = liveCall.id;
   }, [
     currentUserId,
     ensurePeerConnection,
@@ -558,6 +669,12 @@ export function LiveCallControls({
 
       processedSignalIdsRef.current.add(signal.id);
       lastSignalAtRef.current = signal.createdAt;
+      logCallDebug("Processing remote signal.", {
+        callSessionId: signal.callSessionId,
+        signalId: signal.id,
+        type: signal.type,
+        senderId: signal.senderId,
+      });
 
       switch (signal.type) {
         case SignalingEventType.READY: {
@@ -576,14 +693,41 @@ export function LiveCallControls({
           await ensureLocalMedia(liveCall.callType);
           const peerConnection = ensurePeerConnection();
           const sessionDescription = signal.payload as RTCSessionDescriptionInit;
+          const offerDecision = shouldApplyRemoteOffer({
+            currentUserId,
+            initiatedById: liveCall.initiatedById,
+            signalingState: peerConnection.signalingState,
+            remoteDescription: peerConnection.remoteDescription,
+            incomingDescription: sessionDescription,
+          });
+
+          if (!offerDecision.ok) {
+            logCallDebug("Ignored remote offer.", {
+              callSessionId: liveCall.id,
+              signalId: signal.id,
+              reason: offerDecision.reason,
+            });
+            return;
+          }
 
           await peerConnection.setRemoteDescription(
             new RTCSessionDescription(sessionDescription),
           );
+          logCallDebug("Applied remote offer.", {
+            callSessionId: liveCall.id,
+            signalId: signal.id,
+            signalingState: peerConnection.signalingState,
+          });
           await flushPendingIceCandidates();
 
           const answer = await peerConnection.createAnswer();
           await peerConnection.setLocalDescription(answer);
+          awaitingAnswerRef.current = false;
+          logCallDebug("Created local answer.", {
+            callSessionId: liveCall.id,
+            signalId: signal.id,
+            signalingState: peerConnection.signalingState,
+          });
 
           await sendSignal(
             SignalingEventType.ANSWER,
@@ -598,12 +742,44 @@ export function LiveCallControls({
         }
 
         case SignalingEventType.ANSWER: {
+          const liveCall = activeCallRef.current;
+
+          if (!liveCall) {
+            return;
+          }
+
           const peerConnection = ensurePeerConnection();
           const sessionDescription = signal.payload as RTCSessionDescriptionInit;
+          const answerDecision = shouldApplyRemoteAnswer({
+            currentUserId,
+            initiatedById: liveCall.initiatedById,
+            signalingState: peerConnection.signalingState,
+            remoteDescription: peerConnection.remoteDescription,
+            incomingDescription: sessionDescription,
+          });
+
+          if (!answerDecision.ok) {
+            if (peerConnection.signalingState === "stable") {
+              awaitingAnswerRef.current = false;
+            }
+
+            logCallDebug("Ignored remote answer.", {
+              callSessionId: liveCall.id,
+              signalId: signal.id,
+              reason: answerDecision.reason,
+            });
+            return;
+          }
 
           await peerConnection.setRemoteDescription(
             new RTCSessionDescription(sessionDescription),
           );
+          awaitingAnswerRef.current = false;
+          logCallDebug("Applied remote answer.", {
+            callSessionId: liveCall.id,
+            signalId: signal.id,
+            signalingState: peerConnection.signalingState,
+          });
           await flushPendingIceCandidates();
           return;
         }
@@ -617,11 +793,19 @@ export function LiveCallControls({
           }
 
           if (!peerConnection.remoteDescription) {
+            logCallDebug("Queued ICE candidate until remote description is ready.", {
+              callSessionId: signal.callSessionId,
+              signalId: signal.id,
+            });
             pendingIceCandidatesRef.current.push(candidate);
             return;
           }
 
           await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          logCallDebug("Applied ICE candidate.", {
+            callSessionId: signal.callSessionId,
+            signalId: signal.id,
+          });
           return;
         }
 
