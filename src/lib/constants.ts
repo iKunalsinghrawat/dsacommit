@@ -14,6 +14,9 @@ export const PROTECTED_ROUTE_PREFIXES = [
   "/mentors",
   "/community",
   "/profile",
+  "/messages",
+  "/groups",
+  "/connections",
   "/admin",
   "/company-portal",
 ];

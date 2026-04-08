@@ -6,15 +6,27 @@ import { startOfDay, subDays } from "date-fns";
 
 import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import {
+  CallParticipantStatus,
+  CallSessionStatus,
+  CallType,
   CareerTarget,
   ChangeRequestEntityType,
   ChangeRequestOperationType,
   ChangeRequestStatus,
+  ConnectionRequestStatus,
+  ConversationParticipantRole,
+  ConversationType,
   CommunityPostType,
+  GroupJoinPolicy,
+  GroupJoinRequestStatus,
+  GroupMemberRole,
+  GroupPrivacy,
+  NotificationType,
   ParticipationStatus,
   ProfileVisibility,
   RoadmapLevel,
   Role,
+  SignalingEventType,
   StudentLevel,
   SubmissionState,
 } from "../src/generated/prisma/enums";
@@ -38,6 +50,7 @@ import {
 } from "../src/lib/scoring";
 import { hashPassword } from "../src/lib/password";
 import { slugify } from "../src/lib/utils";
+import { createDirectConversationKey } from "../src/lib/communication";
 
 faker.seed(20260404);
 
@@ -108,6 +121,20 @@ type SeedStudent = {
 };
 
 async function clearDatabase() {
+  await prisma.callSignal.deleteMany();
+  await prisma.callParticipant.deleteMany();
+  await prisma.callSession.deleteMany();
+  await prisma.messageReadState.deleteMany();
+  await prisma.directMessage.deleteMany();
+  await prisma.conversationParticipant.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.userBlock.deleteMany();
+  await prisma.userConnection.deleteMany();
+  await prisma.connectionRequest.deleteMany();
+  await prisma.groupJoinRequest.deleteMany();
+  await prisma.groupMember.deleteMany();
+  await prisma.group.deleteMany();
   await prisma.changeRequestReview.deleteMany();
   await prisma.changeRequest.deleteMany();
   await prisma.codeDraft.deleteMany();
@@ -1125,6 +1152,380 @@ async function createApprovalWorkflowFixtures(input: {
   });
 }
 
+async function createCommunicationFixtures() {
+  const communicationUsers = await prisma.user.findMany({
+    where: {
+      email: {
+        in: [
+          "student01@dsacommit.dev",
+          "student02@dsacommit.dev",
+          "student03@dsacommit.dev",
+          "student04@dsacommit.dev",
+          "student05@dsacommit.dev",
+          "aarav@dsacommit.dev",
+        ],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      slug: true,
+      role: true,
+    },
+  });
+
+  const usersByEmail = new Map(
+    communicationUsers.map((user) => [user.email, user]),
+  );
+
+  const studentOne = usersByEmail.get("student01@dsacommit.dev");
+  const studentTwo = usersByEmail.get("student02@dsacommit.dev");
+  const studentThree = usersByEmail.get("student03@dsacommit.dev");
+  const studentFour = usersByEmail.get("student04@dsacommit.dev");
+  const studentFive = usersByEmail.get("student05@dsacommit.dev");
+  const mentor = usersByEmail.get("aarav@dsacommit.dev");
+
+  if (
+    !studentOne ||
+    !studentTwo ||
+    !studentThree ||
+    !studentFour ||
+    !studentFive ||
+    !mentor
+  ) {
+    return;
+  }
+
+  const createMessageWithReadStates = async (input: {
+    conversationId: string;
+    senderId: string;
+    content: string;
+    deliveredTo: string[];
+    readBy: string[];
+    createdAt?: Date;
+  }) => {
+    const messageTimestamp = input.createdAt ?? new Date();
+
+    const message = await prisma.directMessage.create({
+      data: {
+        conversationId: input.conversationId,
+        senderId: input.senderId,
+        content: input.content,
+        createdAt: messageTimestamp,
+      },
+    });
+
+    await prisma.messageReadState.createMany({
+      data: input.deliveredTo.map((userId) => ({
+        messageId: message.id,
+        userId,
+        deliveredAt: messageTimestamp,
+        readAt: input.readBy.includes(userId) ? messageTimestamp : null,
+      })),
+    });
+
+    await prisma.conversation.update({
+      where: { id: input.conversationId },
+      data: {
+        lastMessageAt: messageTimestamp,
+        lastMessagePreview: input.content.slice(0, 120),
+      },
+    });
+
+    return message;
+  };
+
+  const acceptedConnectionPairs = [
+    [studentOne.id, studentTwo.id],
+    [studentTwo.id, studentThree.id],
+  ].map(([firstUserId, secondUserId]) => [firstUserId, secondUserId].sort() as [string, string]);
+
+  await prisma.userConnection.createMany({
+    data: acceptedConnectionPairs.map(([userOneId, userTwoId]) => ({
+      userOneId,
+      userTwoId,
+    })),
+    skipDuplicates: true,
+  });
+
+  await prisma.connectionRequest.createMany({
+    data: [
+      {
+        senderId: studentThree.id,
+        receiverId: studentOne.id,
+        status: ConnectionRequestStatus.PENDING,
+      },
+      {
+        senderId: studentOne.id,
+        receiverId: studentFour.id,
+        status: ConnectionRequestStatus.PENDING,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  await prisma.userBlock.createMany({
+    data: [
+      {
+        blockerId: studentOne.id,
+        blockedId: studentFive.id,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  const studentConversation = await prisma.conversation.upsert({
+    where: {
+      directKey: createDirectConversationKey(studentOne.id, studentTwo.id),
+    },
+    create: {
+      type: ConversationType.DIRECT,
+      directKey: createDirectConversationKey(studentOne.id, studentTwo.id),
+      createdById: studentOne.id,
+      participants: {
+        create: [
+          { userId: studentOne.id },
+          { userId: studentTwo.id },
+        ],
+      },
+    },
+    update: {},
+  });
+
+  const mentorConversation = await prisma.conversation.upsert({
+    where: {
+      directKey: createDirectConversationKey(studentOne.id, mentor.id),
+    },
+    create: {
+      type: ConversationType.DIRECT,
+      directKey: createDirectConversationKey(studentOne.id, mentor.id),
+      createdById: studentOne.id,
+      participants: {
+        create: [
+          { userId: studentOne.id },
+          { userId: mentor.id },
+        ],
+      },
+    },
+    update: {},
+  });
+
+  await createMessageWithReadStates({
+    conversationId: studentConversation.id,
+    senderId: studentOne.id,
+    content:
+      "Let's solve two graph mediums this week and review each other's approach before moving to harder variants.",
+    deliveredTo: [studentOne.id, studentTwo.id],
+    readBy: [studentOne.id, studentTwo.id],
+    createdAt: subDays(new Date(), 1),
+  });
+
+  await createMessageWithReadStates({
+    conversationId: studentConversation.id,
+    senderId: studentTwo.id,
+    content:
+      "I'm in. Start with traversal state and shortest-path pattern recognition, then we'll compare notes on Friday.",
+    deliveredTo: [studentOne.id, studentTwo.id],
+    readBy: [studentTwo.id],
+  });
+
+  await createMessageWithReadStates({
+    conversationId: mentorConversation.id,
+    senderId: studentOne.id,
+    content:
+      "I'm getting stuck turning brute force graph ideas into the right BFS or DFS framing. Can you suggest a sharper checkpoint?",
+    deliveredTo: [studentOne.id, mentor.id],
+    readBy: [studentOne.id, mentor.id],
+  });
+
+  await createMessageWithReadStates({
+    conversationId: mentorConversation.id,
+    senderId: mentor.id,
+    content:
+      "Before coding, say the state transition out loud: what makes a node visited, what work happens on entry, and what stops revisits from corrupting the answer.",
+    deliveredTo: [studentOne.id, mentor.id],
+    readBy: [mentor.id],
+  });
+
+  const arraysGroup = await prisma.group.create({
+    data: {
+      slug: "arrays-accountability-circle",
+      name: "Arrays Accountability Circle",
+      description:
+        "A compact daily practice room for arrays, windows, and prefix sums with short accountability check-ins.",
+      category: "Arrays",
+      privacy: GroupPrivacy.PUBLIC,
+      joinPolicy: GroupJoinPolicy.OPEN,
+      createdById: studentOne.id,
+    },
+  });
+
+  await prisma.groupMember.createMany({
+    data: [
+      {
+        groupId: arraysGroup.id,
+        userId: studentOne.id,
+        role: GroupMemberRole.OWNER,
+        addedById: studentOne.id,
+      },
+      {
+        groupId: arraysGroup.id,
+        userId: studentTwo.id,
+        role: GroupMemberRole.ADMIN,
+        addedById: studentOne.id,
+      },
+      {
+        groupId: arraysGroup.id,
+        userId: studentThree.id,
+        role: GroupMemberRole.MEMBER,
+        addedById: studentTwo.id,
+      },
+    ],
+  });
+
+  const arraysGroupConversation = await prisma.conversation.create({
+    data: {
+      type: ConversationType.GROUP,
+      groupId: arraysGroup.id,
+      createdById: studentOne.id,
+      participants: {
+        create: [
+          {
+            userId: studentOne.id,
+            role: ConversationParticipantRole.ADMIN,
+          },
+          {
+            userId: studentTwo.id,
+            role: ConversationParticipantRole.ADMIN,
+          },
+          {
+            userId: studentThree.id,
+          },
+        ],
+      },
+    },
+  });
+
+  await createMessageWithReadStates({
+    conversationId: arraysGroupConversation.id,
+    senderId: studentOne.id,
+    content:
+      "Today's goal: one sliding-window easy, one prefix-sum medium, then post the exact invariant you used.",
+    deliveredTo: [studentOne.id, studentTwo.id, studentThree.id],
+    readBy: [studentOne.id, studentTwo.id],
+  });
+
+  const privateGroup = await prisma.group.create({
+    data: {
+      slug: "google-bfs-pod",
+      name: "Google BFS Pod",
+      description:
+        "Private prep pod for students focusing on BFS, grids, and interview-quality explanation habits.",
+      category: "Google prep",
+      privacy: GroupPrivacy.PRIVATE,
+      joinPolicy: GroupJoinPolicy.APPROVAL,
+      createdById: studentTwo.id,
+    },
+  });
+
+  await prisma.groupMember.create({
+    data: {
+      groupId: privateGroup.id,
+      userId: studentTwo.id,
+      role: GroupMemberRole.OWNER,
+      addedById: studentTwo.id,
+    },
+  });
+
+  await prisma.conversation.create({
+    data: {
+      type: ConversationType.GROUP,
+      groupId: privateGroup.id,
+      createdById: studentTwo.id,
+      participants: {
+        create: {
+          userId: studentTwo.id,
+          role: ConversationParticipantRole.ADMIN,
+        },
+      },
+    },
+  });
+
+  await prisma.groupJoinRequest.create({
+    data: {
+      groupId: privateGroup.id,
+      requesterId: studentFour.id,
+      status: GroupJoinRequestStatus.PENDING,
+      message:
+        "I'm working through BFS grids this week and can show up daily for short review updates.",
+    },
+  });
+
+  const ringingCall = await prisma.callSession.create({
+    data: {
+      conversationId: studentConversation.id,
+      initiatedById: studentOne.id,
+      callType: CallType.VIDEO,
+      status: CallSessionStatus.RINGING,
+      participants: {
+        create: [
+          {
+            userId: studentOne.id,
+            status: CallParticipantStatus.JOINED,
+            joinedAt: new Date(),
+          },
+          {
+            userId: studentTwo.id,
+            status: CallParticipantStatus.INVITED,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.callSignal.create({
+    data: {
+      callSessionId: ringingCall.id,
+      senderId: studentOne.id,
+      type: SignalingEventType.READY,
+      payload: {
+        callType: "video",
+        note: "Offer channel ready",
+      },
+    },
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: studentOne.id,
+        actorId: studentThree.id,
+        type: NotificationType.CONNECTION_REQUEST,
+        title: "New connection request",
+        body: `${studentThree.name} wants to connect for practice accountability.`,
+        actionUrl: "/connections",
+      },
+      {
+        userId: studentTwo.id,
+        actorId: studentFour.id,
+        type: NotificationType.GROUP_JOIN_REQUEST,
+        title: "New group join request",
+        body: `${studentFour.name} requested access to ${privateGroup.name}.`,
+        actionUrl: `/groups/${privateGroup.slug}`,
+      },
+      {
+        userId: studentTwo.id,
+        actorId: studentOne.id,
+        type: NotificationType.INCOMING_CALL,
+        title: "Incoming video call",
+        body: "Open the conversation to accept or decline the call.",
+        actionUrl: `/messages/${studentConversation.id}`,
+      },
+    ],
+  });
+}
+
 async function main() {
   await clearDatabase();
 
@@ -1144,6 +1545,7 @@ async function main() {
     companyMap,
     problemMap,
   });
+  await createCommunicationFixtures();
 
   console.log("Seed completed.");
   console.log(`Admin: ${defaultCredentials.admin.email} / ${defaultCredentials.admin.password}`);

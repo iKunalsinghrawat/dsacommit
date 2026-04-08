@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Role, UserPortal } from "@/generated/prisma/enums";
+import { StartConversationButton } from "@/components/communication/communication-controls";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,12 +53,17 @@ export default async function MentorDetailPage({
           <CardContent className="space-y-4">
             <p className="text-sm leading-8 text-muted">{data.mentor.bio}</p>
             {user.role === Role.STUDENT ? (
-              <form action={toggleMentorFollowAction}>
-                <input name="mentorId" type="hidden" value={data.mentor.userId} />
-                <button className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground" type="submit">
-                  {data.isFollowing ? "Following mentor" : "Follow mentor"}
-                </button>
-              </form>
+              <div className="flex flex-wrap gap-3">
+                <form action={toggleMentorFollowAction}>
+                  <input name="mentorId" type="hidden" value={data.mentor.userId} />
+                  <button className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground" type="submit">
+                    {data.isFollowing ? "Following mentor" : "Follow mentor"}
+                  </button>
+                </form>
+                <StartConversationButton targetUserId={data.mentor.userId} variant="secondary">
+                  Message mentor
+                </StartConversationButton>
+              </div>
             ) : null}
           </CardContent>
         </Card>

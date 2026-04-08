@@ -34,6 +34,7 @@ DSA Commit is a production-ready full-stack MVP for disciplined DSA preparation.
 - Public profile pages that guests can view without signing in when visibility is set to `Public`
 - Company pages with focus areas, OA pattern, interview rounds, tips, and tagged questions
 - Mentor pages with follow, doubt posting, and guidance content
+- Social communication system with direct chat, study groups, connection requests, blocks, notifications, and audio/video call session tracking
 - Community feed with post creation, likes, and comments
 - Company portal with role publishing, guidance/event publishing, and committed student discovery
 - Admin panel for featured content, moderation, and content approvals
@@ -48,6 +49,20 @@ Main models include:
 - `StudentProfile`
 - `MentorProfile`
 - `CompanyProfile`
+- `Group`
+- `GroupMember`
+- `GroupJoinRequest`
+- `ConnectionRequest`
+- `UserConnection`
+- `UserBlock`
+- `Conversation`
+- `ConversationParticipant`
+- `DirectMessage`
+- `MessageReadState`
+- `Notification`
+- `CallSession`
+- `CallParticipant`
+- `CallSignal`
 - `Topic`
 - `RoadmapItem`
 - `Problem`
@@ -194,6 +209,42 @@ Roadmap items, topics, and problems now use a request-based moderation flow:
 - rejected requests keep the live content unchanged and store the rejection reason
 
 The seed now creates sample pending, approved, and rejected change requests so the approval queue is visible right away after `npm run db:seed`.
+
+## Social and communication system
+
+The platform now includes a communication MVP for students and mentors:
+
+- direct messaging for `student ↔ student` and `student ↔ mentor`
+- student connection requests with accept, reject, cancel, and remove flows
+- block / unblock rules that shut down messaging, requests, and call attempts
+- public and private study groups with join approvals
+- group chat for members
+- notifications for messages, connection requests, group approvals, and incoming calls
+- audio / video call session controls with a DB-backed signaling foundation
+
+New protected routes:
+
+- `/messages`
+- `/messages/[conversationId]`
+- `/groups`
+- `/groups/create`
+- `/groups/[slug]`
+- `/connections`
+
+Call signaling foundation:
+
+- `GET /api/calls/[callSessionId]/signals`
+- `POST /api/calls/[callSessionId]/signals`
+
+The current MVP stores call state, participants, and signaling events in PostgreSQL so a richer WebRTC transport layer can be plugged in later without changing the product data model.
+
+The seed now also creates:
+
+- student-to-student and student-to-mentor conversations
+- a public group and a private approval-based group
+- pending connection and join requests
+- a blocked-user example
+- notifications and an active ringing call example
 
 ## Docker
 
