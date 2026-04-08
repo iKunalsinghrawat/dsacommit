@@ -17,29 +17,36 @@ import {
 const prisma = {
   user: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
   },
   userBlock: {
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
     deleteMany: vi.fn(),
   },
   userConnection: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     deleteMany: vi.fn(),
   },
   connectionRequest: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     deleteMany: vi.fn(),
   },
   group: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
   },
   groupMember: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
   },
   groupJoinRequest: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     upsert: vi.fn(),
     update: vi.fn(),
   },
@@ -49,22 +56,29 @@ const prisma = {
   },
   conversationParticipant: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     create: vi.fn(),
     upsert: vi.fn(),
+    update: vi.fn(),
   },
   directMessage: {
     create: vi.fn(),
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
   },
   messageReadState: {
     createMany: vi.fn(),
     updateMany: vi.fn(),
+    count: vi.fn(),
   },
   notification: {
     create: vi.fn(),
+    findMany: vi.fn(),
   },
   callSession: {
     findFirst: vi.fn(),
     create: vi.fn(),
+    findMany: vi.fn(),
   },
   $transaction: vi.fn(),
 } as const;
@@ -337,5 +351,53 @@ describe("communication service", () => {
         }),
       }),
     );
+  });
+
+  it("returns an empty inbox state when communication tables are missing", async () => {
+    prisma.conversationParticipant.findMany.mockRejectedValue({
+      code: "P2021",
+      message: "The table `ConversationParticipant` does not exist in the current database.",
+    });
+
+    const result = await communicationService.getMessagesPageData("student-1", Role.STUDENT);
+
+    expect(result).toEqual({
+      conversations: [],
+      notifications: [],
+      quickStartUsers: [],
+      unreadNotificationCount: 0,
+    });
+  });
+
+  it("returns an empty groups state when group tables are missing", async () => {
+    prisma.groupMember.findMany.mockRejectedValue({
+      code: "P2021",
+      message: "The table `GroupMember` does not exist in the current database.",
+    });
+
+    const result = await communicationService.getGroupsPageData("student-1");
+
+    expect(result).toEqual({
+      myMemberships: [],
+      discoverableGroups: [],
+      pendingRequests: [],
+    });
+  });
+
+  it("returns an empty connections state when connection tables are missing", async () => {
+    prisma.userConnection.findMany.mockRejectedValue({
+      code: "P2021",
+      message: "The table `ConnectionRequest` does not exist in the current database.",
+    });
+
+    const result = await communicationService.getConnectionsPageData("student-1");
+
+    expect(result).toEqual({
+      connections: [],
+      incomingRequests: [],
+      outgoingRequests: [],
+      blockedUsers: [],
+      discoverableStudents: [],
+    });
   });
 });

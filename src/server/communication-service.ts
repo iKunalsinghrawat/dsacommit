@@ -27,6 +27,7 @@ import {
   requiresAcceptedConnectionForDirectConversation,
 } from "@/lib/communication";
 import { prisma } from "@/lib/prisma";
+import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards";
 import { slugify } from "@/lib/utils";
 
 type TransactionClient = Prisma.TransactionClient;
@@ -45,6 +46,33 @@ const communicationUserSelect = {
 
 function createConversationPreview(content: string) {
   return content.length > 120 ? `${content.slice(0, 117)}...` : content;
+}
+
+function getEmptyMessagesPageData() {
+  return {
+    conversations: [],
+    notifications: [],
+    quickStartUsers: [],
+    unreadNotificationCount: 0,
+  };
+}
+
+function getEmptyGroupsPageData() {
+  return {
+    myMemberships: [],
+    discoverableGroups: [],
+    pendingRequests: [],
+  };
+}
+
+function getEmptyConnectionsPageData() {
+  return {
+    connections: [],
+    incomingRequests: [],
+    outgoingRequests: [],
+    blockedUsers: [],
+    discoverableStudents: [],
+  };
 }
 
 async function createUniqueGroupSlug(name: string) {
@@ -282,291 +310,364 @@ async function markConversationRead(
 }
 
 export async function getMessagesPageData(userId: string, role: Role) {
-  const [conversationMemberships, notifications] = await Promise.all([
-    prisma.conversationParticipant.findMany({
-      where: { userId, isArchived: false },
-      include: {
-        conversation: {
-          include: {
-            group: true,
-            participants: {
-              include: {
-                user: {
-                  select: communicationUserSelect,
+  try {
+    const [conversationMemberships, notifications] = await Promise.all([
+      prisma.conversationParticipant.findMany({
+        where: { userId, isArchived: false },
+        include: {
+          conversation: {
+            include: {
+              group: true,
+              participants: {
+                include: {
+                  user: {
+                    select: communicationUserSelect,
+                  },
+                },
+              },
+              callSessions: {
+                where: {
+                  status: { in: [CallSessionStatus.RINGING, CallSessionStatus.ACTIVE] },
+                },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                include: {
+                  participants: true,
                 },
               },
             },
-            callSessions: {
-              where: {
-                status: { in: [CallSessionStatus.RINGING, CallSessionStatus.ACTIVE] },
-              },
-              orderBy: { createdAt: "desc" },
-              take: 1,
-              include: {
-                participants: true,
-              },
+          },
+        },
+        orderBy: {
+          conversation: {
+            updatedAt: "desc",
+          },
+        },
+      }),
+      prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        include: {
+          actor: {
+            select: communicationUserSelect,
+          },
+        },
+      }),
+    ]);
+
+    const conversations = await Promise.all(
+      conversationMemberships.map(async (membership) => {
+        const unreadCount = await prisma.messageReadState.count({
+          where: {
+            userId,
+            readAt: null,
+            message: {
+              conversationId: membership.conversationId,
+              senderId: { not: userId },
             },
           },
-        },
-      },
-      orderBy: {
-        conversation: {
-          updatedAt: "desc",
-        },
-      },
-    }),
-    prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-      include: {
-        actor: {
-          select: communicationUserSelect,
-        },
-      },
-    }),
-  ]);
+        });
 
-  const conversations = await Promise.all(
-    conversationMemberships.map(async (membership) => {
-      const unreadCount = await prisma.messageReadState.count({
-        where: {
-          userId,
-          readAt: null,
-          message: {
-            conversationId: membership.conversationId,
-            senderId: { not: userId },
+        const latestMessage = await prisma.directMessage.findFirst({
+          where: { conversationId: membership.conversationId },
+          orderBy: { createdAt: "desc" },
+          include: {
+            sender: {
+              select: communicationUserSelect,
+            },
+            readStates: true,
           },
-        },
-      });
+        });
 
-      const latestMessage = await prisma.directMessage.findFirst({
-        where: { conversationId: membership.conversationId },
-        orderBy: { createdAt: "desc" },
+        const otherParticipants = membership.conversation.participants.filter(
+          (participant) => participant.userId !== userId,
+        );
+        const title =
+          membership.conversation.type === ConversationType.GROUP
+            ? membership.conversation.group?.name ?? "Study group"
+            : otherParticipants.map((participant) => participant.user.name).join(", ");
+
+        return {
+          id: membership.conversation.id,
+          type: membership.conversation.type,
+          title,
+          group: membership.conversation.group,
+          participants: membership.conversation.participants,
+          unreadCount,
+          lastReadAt: membership.lastReadAt,
+          latestMessage,
+          activeCall: membership.conversation.callSessions[0] ?? null,
+        };
+      }),
+    );
+
+    let quickStartUsers: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      role: Role;
+      headline: string | null;
+      isVerified: boolean;
+    }> = [];
+
+    if (role === Role.STUDENT) {
+      const [connections, mentors] = await Promise.all([
+        prisma.userConnection.findMany({
+          where: {
+            OR: [{ userOneId: userId }, { userTwoId: userId }],
+          },
+          include: {
+            userOne: {
+              select: communicationUserSelect,
+            },
+            userTwo: {
+              select: communicationUserSelect,
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 8,
+        }),
+        prisma.user.findMany({
+          where: { role: Role.MENTOR, status: UserStatus.ACTIVE },
+          select: communicationUserSelect,
+          orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
+          take: 6,
+        }),
+      ]);
+
+      quickStartUsers = [
+        ...connections.map((connection) =>
+          connection.userOneId === userId ? connection.userTwo : connection.userOne,
+        ),
+        ...mentors,
+      ].filter(
+        (user, index, collection) =>
+          collection.findIndex((item) => item.id === user.id) === index,
+      );
+    } else if (role === Role.MENTOR) {
+      const activeConversationUserIds = conversations.flatMap((conversation) =>
+        conversation.participants
+          .filter((participant) => participant.userId !== userId)
+          .map((participant) => participant.userId),
+      );
+
+      quickStartUsers = await prisma.user.findMany({
+        where: {
+          id: { in: activeConversationUserIds },
+        },
+        select: communicationUserSelect,
+        orderBy: { name: "asc" },
+      });
+    }
+
+    return {
+      conversations,
+      notifications,
+      quickStartUsers,
+      unreadNotificationCount: notifications.filter((item) => !item.isRead).length,
+    };
+  } catch (error) {
+    logServerError("getMessagesPageData", error, { userId, role });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return getEmptyMessagesPageData();
+  }
+}
+
+export async function getConversationPageData(userId: string, conversationId: string) {
+  try {
+    const participant = await getConversationParticipantRecord(userId, conversationId);
+
+    if (!participant) {
+      return null;
+    }
+
+    const [messages, recentCalls] = await Promise.all([
+      prisma.directMessage.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
         include: {
           sender: {
             select: communicationUserSelect,
           },
           readStates: true,
         },
-      });
-
-      const otherParticipants = membership.conversation.participants.filter(
-        (participant) => participant.userId !== userId,
-      );
-      const title =
-        membership.conversation.type === ConversationType.GROUP
-          ? membership.conversation.group?.name ?? "Study group"
-          : otherParticipants.map((participant) => participant.user.name).join(", ");
-
-      return {
-        id: membership.conversation.id,
-        type: membership.conversation.type,
-        title,
-        group: membership.conversation.group,
-        participants: membership.conversation.participants,
-        unreadCount,
-        lastReadAt: membership.lastReadAt,
-        latestMessage,
-        activeCall: membership.conversation.callSessions[0] ?? null,
-      };
-    }),
-  );
-
-  let quickStartUsers: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    role: Role;
-    headline: string | null;
-    isVerified: boolean;
-  }> = [];
-
-  if (role === Role.STUDENT) {
-    const [connections, mentors] = await Promise.all([
-      prisma.userConnection.findMany({
-        where: {
-          OR: [{ userOneId: userId }, { userTwoId: userId }],
-        },
-        include: {
-          userOne: {
-            select: communicationUserSelect,
-          },
-          userTwo: {
-            select: communicationUserSelect,
-          },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 8,
+        take: 200,
       }),
-      prisma.user.findMany({
-        where: { role: Role.MENTOR, status: UserStatus.ACTIVE },
-        select: communicationUserSelect,
-        orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
+      prisma.callSession.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "desc" },
         take: 6,
+        include: {
+          participants: {
+            include: {
+              user: {
+                select: communicationUserSelect,
+              },
+            },
+          },
+        },
       }),
     ]);
 
-    quickStartUsers = [
-      ...connections.map((connection) =>
-        connection.userOneId === userId ? connection.userTwo : connection.userOne,
-      ),
-      ...mentors,
-    ].filter(
-      (user, index, collection) =>
-        collection.findIndex((item) => item.id === user.id) === index,
-    );
-  } else if (role === Role.MENTOR) {
-    const activeConversationUserIds = conversations.flatMap((conversation) =>
-      conversation.participants
-        .filter((participant) => participant.userId !== userId)
-        .map((participant) => participant.userId),
-    );
-
-    quickStartUsers = await prisma.user.findMany({
-      where: {
-        id: { in: activeConversationUserIds },
-      },
-      select: communicationUserSelect,
-      orderBy: { name: "asc" },
+    await prisma.$transaction(async (tx) => {
+      await markConversationRead(tx, userId, conversationId);
     });
-  }
 
-  return {
-    conversations,
-    notifications,
-    quickStartUsers,
-    unreadNotificationCount: notifications.filter((item) => !item.isRead).length,
-  };
-}
+    const otherParticipants = participant.conversation.participants.filter(
+      (member) => member.userId !== userId,
+    );
 
-export async function getConversationPageData(userId: string, conversationId: string) {
-  const participant = await getConversationParticipantRecord(userId, conversationId);
+    let messageDisabledReason: string | null = null;
+    if (participant.conversation.type === ConversationType.DIRECT && otherParticipants[0]) {
+      const blockRecord = await checkBlockBetweenUsers(userId, otherParticipants[0].userId);
 
-  if (!participant) {
-    return null;
-  }
-
-  const [messages, recentCalls] = await Promise.all([
-    prisma.directMessage.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: "asc" },
-      include: {
-        sender: {
-          select: communicationUserSelect,
-        },
-        readStates: true,
-      },
-      take: 200,
-    }),
-    prisma.callSession.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: "desc" },
-      take: 6,
-      include: {
-        participants: {
-          include: {
-            user: {
-              select: communicationUserSelect,
+      if (blockRecord) {
+        messageDisabledReason = "Messaging is disabled because one user has blocked the other.";
+      } else {
+        const currentUser = await findActiveCommunicationUser(userId);
+        const targetUser = otherParticipants[0].user;
+        if (
+          currentUser &&
+          requiresAcceptedConnectionForDirectConversation(currentUser.role, targetUser.role)
+        ) {
+          const [userOneId, userTwoId] = canonicalizeUserPair(userId, targetUser.id);
+          const connection = await prisma.userConnection.findUnique({
+            where: {
+              userOneId_userTwoId: {
+                userOneId,
+                userTwoId,
+              },
             },
-          },
-        },
-      },
-    }),
-  ]);
+          });
 
-  await prisma.$transaction(async (tx) => {
-    await markConversationRead(tx, userId, conversationId);
-  });
-
-  const otherParticipants = participant.conversation.participants.filter(
-    (member) => member.userId !== userId,
-  );
-
-  let messageDisabledReason: string | null = null;
-  if (participant.conversation.type === ConversationType.DIRECT && otherParticipants[0]) {
-    const blockRecord = await checkBlockBetweenUsers(userId, otherParticipants[0].userId);
-
-    if (blockRecord) {
-      messageDisabledReason = "Messaging is disabled because one user has blocked the other.";
-    } else {
-      const currentUser = await findActiveCommunicationUser(userId);
-      const targetUser = otherParticipants[0].user;
-      if (
-        currentUser &&
-        requiresAcceptedConnectionForDirectConversation(currentUser.role, targetUser.role)
-      ) {
-        const [userOneId, userTwoId] = canonicalizeUserPair(userId, targetUser.id);
-        const connection = await prisma.userConnection.findUnique({
-          where: {
-            userOneId_userTwoId: {
-              userOneId,
-              userTwoId,
-            },
-          },
-        });
-
-        if (!connection) {
-          messageDisabledReason =
-            "This direct conversation is now read-only because the student connection was removed.";
+          if (!connection) {
+            messageDisabledReason =
+              "This direct conversation is now read-only because the student connection was removed.";
+          }
         }
       }
     }
-  }
 
-  return {
-    conversation: participant.conversation,
-    currentParticipant: participant,
-    otherParticipants,
-    messages,
-    recentCalls,
-    canStartCall:
-      participant.conversation.type === ConversationType.DIRECT &&
-      canStartCallForConversation(participant.conversation.type) &&
-      !messageDisabledReason,
-    messageDisabledReason,
-  };
+    return {
+      conversation: participant.conversation,
+      currentParticipant: participant,
+      otherParticipants,
+      messages,
+      recentCalls,
+      canStartCall:
+        participant.conversation.type === ConversationType.DIRECT &&
+        canStartCallForConversation(participant.conversation.type) &&
+        !messageDisabledReason,
+      messageDisabledReason,
+    };
+  } catch (error) {
+    logServerError("getConversationPageData", error, { userId, conversationId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return null;
+  }
 }
 
 export async function getGroupsPageData(userId: string) {
-  const [myMemberships, discoverableGroups, pendingRequests] = await Promise.all([
-    prisma.groupMember.findMany({
-      where: { userId },
-      include: {
-        group: {
-          include: {
-            createdBy: {
-              select: communicationUserSelect,
-            },
-            members: {
-              include: {
-                user: {
-                  select: communicationUserSelect,
+  try {
+    const [myMemberships, discoverableGroups, pendingRequests] = await Promise.all([
+      prisma.groupMember.findMany({
+        where: { userId },
+        include: {
+          group: {
+            include: {
+              createdBy: {
+                select: communicationUserSelect,
+              },
+              members: {
+                include: {
+                  user: {
+                    select: communicationUserSelect,
+                  },
                 },
               },
-            },
-            conversation: {
-              select: {
-                id: true,
-                lastMessageAt: true,
-                lastMessagePreview: true,
+              conversation: {
+                select: {
+                  id: true,
+                  lastMessageAt: true,
+                  lastMessagePreview: true,
+                },
               },
             },
           },
         },
-      },
-      orderBy: {
-        group: {
-          updatedAt: "desc",
+        orderBy: {
+          group: {
+            updatedAt: "desc",
+          },
         },
-      },
-    }),
-    prisma.group.findMany({
-      where: {
-        members: {
-          none: { userId },
+      }),
+      prisma.group.findMany({
+        where: {
+          members: {
+            none: { userId },
+          },
         },
-      },
+        include: {
+          createdBy: {
+            select: communicationUserSelect,
+          },
+          members: {
+            include: {
+              user: {
+                select: communicationUserSelect,
+              },
+            },
+          },
+          joinRequests: {
+            where: { requesterId: userId },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
+        take: 24,
+      }),
+      prisma.groupJoinRequest.findMany({
+        where: {
+          requesterId: userId,
+          status: GroupJoinRequestStatus.PENDING,
+        },
+        include: {
+          group: true,
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      myMemberships,
+      discoverableGroups,
+      pendingRequests,
+    };
+  } catch (error) {
+    logServerError("getGroupsPageData", error, { userId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return getEmptyGroupsPageData();
+  }
+}
+
+export async function getGroupPageData(userId: string, slug: string) {
+  try {
+    const group = await prisma.group.findUnique({
+      where: { slug },
       include: {
         createdBy: {
           select: communicationUserSelect,
@@ -577,217 +678,194 @@ export async function getGroupsPageData(userId: string) {
               select: communicationUserSelect,
             },
           },
+          orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
         },
         joinRequests: {
-          where: { requesterId: userId },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-      },
-      orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
-      take: 24,
-    }),
-    prisma.groupJoinRequest.findMany({
-      where: {
-        requesterId: userId,
-        status: GroupJoinRequestStatus.PENDING,
-      },
-      include: {
-        group: true,
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
-
-  return {
-    myMemberships,
-    discoverableGroups,
-    pendingRequests,
-  };
-}
-
-export async function getGroupPageData(userId: string, slug: string) {
-  const group = await prisma.group.findUnique({
-    where: { slug },
-    include: {
-      createdBy: {
-        select: communicationUserSelect,
-      },
-      members: {
-        include: {
-          user: {
-            select: communicationUserSelect,
+          where: { status: GroupJoinRequestStatus.PENDING },
+          include: {
+            requester: {
+              select: communicationUserSelect,
+            },
           },
+          orderBy: { createdAt: "asc" },
         },
-        orderBy: [{ role: "asc" }, { joinedAt: "asc" }],
-      },
-      joinRequests: {
-        where: { status: GroupJoinRequestStatus.PENDING },
-        include: {
-          requester: {
-            select: communicationUserSelect,
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      },
-      conversation: {
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: communicationUserSelect,
+        conversation: {
+          include: {
+            participants: {
+              include: {
+                user: {
+                  select: communicationUserSelect,
+                },
               },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  if (!group) {
+    if (!group) {
+      return null;
+    }
+
+    const membership = group.members.find((member) => member.userId === userId) ?? null;
+    const pendingJoinRequest = await prisma.groupJoinRequest.findUnique({
+      where: {
+        groupId_requesterId: {
+          groupId: group.id,
+          requesterId: userId,
+        },
+      },
+    });
+
+    const messages =
+      membership && group.conversation
+        ? await prisma.directMessage.findMany({
+            where: { conversationId: group.conversation.id },
+            orderBy: { createdAt: "asc" },
+            include: {
+              sender: {
+                select: communicationUserSelect,
+              },
+              readStates: true,
+            },
+            take: 200,
+          })
+        : [];
+
+    if (membership && group.conversation) {
+      await prisma.$transaction(async (tx) => {
+        await markConversationRead(tx, userId, group.conversation!.id);
+      });
+    }
+
+    return {
+      group,
+      membership,
+      pendingJoinRequest,
+      messages,
+      canManage: membership ? canManageGroupMembership(membership.role) : false,
+    };
+  } catch (error) {
+    logServerError("getGroupPageData", error, { userId, slug });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
     return null;
   }
+}
 
-  const membership = group.members.find((member) => member.userId === userId) ?? null;
-  const pendingJoinRequest = await prisma.groupJoinRequest.findUnique({
-    where: {
-      groupId_requesterId: {
-        groupId: group.id,
-        requesterId: userId,
-      },
-    },
-  });
-
-  const messages =
-    membership && group.conversation
-      ? await prisma.directMessage.findMany({
-          where: { conversationId: group.conversation.id },
-          orderBy: { createdAt: "asc" },
+export async function getConnectionsPageData(userId: string) {
+  try {
+    const [connections, incomingRequests, outgoingRequests, blockedUsers, discoverStudents] =
+      await Promise.all([
+        prisma.userConnection.findMany({
+          where: {
+            OR: [{ userOneId: userId }, { userTwoId: userId }],
+          },
+          include: {
+            userOne: {
+              select: communicationUserSelect,
+            },
+            userTwo: {
+              select: communicationUserSelect,
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.connectionRequest.findMany({
+          where: {
+            receiverId: userId,
+            status: ConnectionRequestStatus.PENDING,
+          },
           include: {
             sender: {
               select: communicationUserSelect,
             },
-            readStates: true,
           },
-          take: 200,
-        })
-      : [];
-
-  if (membership && group.conversation) {
-    await prisma.$transaction(async (tx) => {
-      await markConversationRead(tx, userId, group.conversation!.id);
-    });
-  }
-
-  return {
-    group,
-    membership,
-    pendingJoinRequest,
-    messages,
-    canManage: membership ? canManageGroupMembership(membership.role) : false,
-  };
-}
-
-export async function getConnectionsPageData(userId: string) {
-  const [connections, incomingRequests, outgoingRequests, blockedUsers, discoverStudents] =
-    await Promise.all([
-      prisma.userConnection.findMany({
-        where: {
-          OR: [{ userOneId: userId }, { userTwoId: userId }],
-        },
-        include: {
-          userOne: {
-            select: communicationUserSelect,
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.connectionRequest.findMany({
+          where: {
+            senderId: userId,
+            status: ConnectionRequestStatus.PENDING,
           },
-          userTwo: {
-            select: communicationUserSelect,
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.connectionRequest.findMany({
-        where: {
-          receiverId: userId,
-          status: ConnectionRequestStatus.PENDING,
-        },
-        include: {
-          sender: {
-            select: communicationUserSelect,
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.connectionRequest.findMany({
-        where: {
-          senderId: userId,
-          status: ConnectionRequestStatus.PENDING,
-        },
-        include: {
-          receiver: {
-            select: communicationUserSelect,
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.userBlock.findMany({
-        where: { blockerId: userId },
-        include: {
-          blocked: {
-            select: communicationUserSelect,
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.user.findMany({
-        where: {
-          role: Role.STUDENT,
-          status: UserStatus.ACTIVE,
-          id: { not: userId },
-        },
-        select: {
-          ...communicationUserSelect,
-          studentProfile: {
-            select: {
-              currentLevel: true,
-              target: true,
-              weeklyConsistencyScore: true,
-              commitmentScore: true,
+          include: {
+            receiver: {
+              select: communicationUserSelect,
             },
           },
-        },
-        orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
-        take: 20,
-      }),
-    ]);
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.userBlock.findMany({
+          where: { blockerId: userId },
+          include: {
+            blocked: {
+              select: communicationUserSelect,
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.user.findMany({
+          where: {
+            role: Role.STUDENT,
+            status: UserStatus.ACTIVE,
+            id: { not: userId },
+          },
+          select: {
+            ...communicationUserSelect,
+            studentProfile: {
+              select: {
+                currentLevel: true,
+                target: true,
+                weeklyConsistencyScore: true,
+                commitmentScore: true,
+              },
+            },
+          },
+          orderBy: [{ isFeatured: "desc" }, { name: "asc" }],
+          take: 20,
+        }),
+      ]);
 
-  const blockedUserIds = new Set(blockedUsers.map((item) => item.blockedId));
-  const connectedUserIds = new Set(
-    connections.map((connection) =>
-      connection.userOneId === userId ? connection.userTwoId : connection.userOneId,
-    ),
-  );
-  const incomingSenderIds = new Set(incomingRequests.map((request) => request.senderId));
-  const outgoingReceiverIds = new Set(outgoingRequests.map((request) => request.receiverId));
+    const blockedUserIds = new Set(blockedUsers.map((item) => item.blockedId));
+    const connectedUserIds = new Set(
+      connections.map((connection) =>
+        connection.userOneId === userId ? connection.userTwoId : connection.userOneId,
+      ),
+    );
+    const incomingSenderIds = new Set(incomingRequests.map((request) => request.senderId));
+    const outgoingReceiverIds = new Set(outgoingRequests.map((request) => request.receiverId));
 
-  const discoverableStudents = discoverStudents.filter(
-    (student) =>
-      !blockedUserIds.has(student.id) &&
-      !connectedUserIds.has(student.id) &&
-      !incomingSenderIds.has(student.id) &&
-      !outgoingReceiverIds.has(student.id),
-  );
+    const discoverableStudents = discoverStudents.filter(
+      (student) =>
+        !blockedUserIds.has(student.id) &&
+        !connectedUserIds.has(student.id) &&
+        !incomingSenderIds.has(student.id) &&
+        !outgoingReceiverIds.has(student.id),
+    );
 
-  return {
-    connections: connections.map((connection) => ({
-      id: connection.id,
-      createdAt: connection.createdAt,
-      user: connection.userOneId === userId ? connection.userTwo : connection.userOne,
-    })),
-    incomingRequests,
-    outgoingRequests,
-    blockedUsers,
-    discoverableStudents,
-  };
+    return {
+      connections: connections.map((connection) => ({
+        id: connection.id,
+        createdAt: connection.createdAt,
+        user: connection.userOneId === userId ? connection.userTwo : connection.userOne,
+      })),
+      incomingRequests,
+      outgoingRequests,
+      blockedUsers,
+      discoverableStudents,
+    };
+  } catch (error) {
+    logServerError("getConnectionsPageData", error, { userId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return getEmptyConnectionsPageData();
+  }
 }
 
 export async function startDirectConversation(input: {

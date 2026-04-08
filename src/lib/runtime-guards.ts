@@ -24,7 +24,7 @@ export function isPrismaCompatibilityError(error: unknown) {
   return (
     code === "P2021" ||
     code === "P2022" ||
-    /RoadmapItem|ChangeRequest|isArchived|archivedAt|ProblemTestCase|CodeDraft|CodeSubmission|codeExecutionEnabled|starterCode|starterLanguage|accessGrants|passwordResetRequired|sessionVersion|deletedAt|lastActiveAt/i.test(
+    /RoadmapItem|ChangeRequest|isArchived|archivedAt|ProblemTestCase|CodeDraft|CodeSubmission|codeExecutionEnabled|starterCode|starterLanguage|accessGrants|passwordResetRequired|sessionVersion|deletedAt|lastActiveAt|ConnectionRequest|ConversationParticipant|Conversation|DirectMessage|GroupJoinRequest|GroupMember|Notification|UserBlock|UserConnection/i.test(
       message,
     )
   );
