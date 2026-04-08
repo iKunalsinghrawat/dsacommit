@@ -79,6 +79,12 @@ const defaultAccessGrantsByRole: Record<Role, UserPortal[]> = {
   ],
 };
 
+const legacySocialPortalFallbackByRole: Partial<Record<Role, UserPortal[]>> = {
+  [Role.STUDENT]: [UserPortal.MESSAGES, UserPortal.GROUPS, UserPortal.CONNECTIONS],
+  [Role.MENTOR]: [UserPortal.MESSAGES],
+  [Role.ADMIN]: [UserPortal.MESSAGES, UserPortal.GROUPS, UserPortal.CONNECTIONS],
+};
+
 export const navigationItems: Array<{
   href: string;
   label: string;
@@ -109,7 +115,15 @@ export function normalizeAccessGrants(role: Role, accessGrants?: UserPortal[] | 
     return getDefaultAccessGrants(role);
   }
 
-  return [...new Set(accessGrants)];
+  const grants = [...new Set(accessGrants)];
+  const socialFallback = legacySocialPortalFallbackByRole[role] ?? [];
+  const hasAnySocialPortal = socialFallback.some((portal) => grants.includes(portal));
+
+  if (!hasAnySocialPortal && socialFallback.length) {
+    return [...new Set([...grants, ...socialFallback])];
+  }
+
+  return grants;
 }
 
 export function isRestrictedStatus(status: UserStatus) {

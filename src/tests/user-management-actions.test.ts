@@ -146,7 +146,14 @@ describe("user management actions", () => {
         where: { id: "user-1" },
         data: expect.objectContaining({
           role: Role.STUDENT,
-          accessGrants: [UserPortal.DASHBOARD, UserPortal.PROBLEMS, UserPortal.PROFILE],
+          accessGrants: expect.arrayContaining([
+            UserPortal.DASHBOARD,
+            UserPortal.PROBLEMS,
+            UserPortal.PROFILE,
+            UserPortal.MESSAGES,
+            UserPortal.GROUPS,
+            UserPortal.CONNECTIONS,
+          ]),
         }),
       }),
     );
