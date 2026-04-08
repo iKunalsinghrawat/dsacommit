@@ -10,12 +10,18 @@ import { getNavigationItems } from "@/lib/access-control";
 import { roleLabels } from "@/lib/constants";
 import { cn, getInitials } from "@/lib/utils";
 
+import {
+  CommunicationRealtimeProvider,
+  useCommunicationRealtime,
+} from "@/components/communication/communication-realtime-provider";
 import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { CommunicationRealtimeCall } from "@/lib/communication-realtime";
 
 type ShellUser = {
+  id: string;
   name: string;
   role: Role;
   headline: string | null;
@@ -24,6 +30,28 @@ type ShellUser = {
 
 export function AppShell({
   children,
+  initialIncomingCall,
+  initialUnreadNotificationCount,
+  user,
+}: {
+  children: ReactNode;
+  initialIncomingCall: CommunicationRealtimeCall | null;
+  initialUnreadNotificationCount: number;
+  user: ShellUser;
+}) {
+  return (
+    <CommunicationRealtimeProvider
+      initialIncomingCall={initialIncomingCall}
+      initialUnreadNotificationCount={initialUnreadNotificationCount}
+      isEnabled={user.accessGrants.includes(UserPortal.MESSAGES)}
+    >
+      <AppShellFrame user={user}>{children}</AppShellFrame>
+    </CommunicationRealtimeProvider>
+  );
+}
+
+function AppShellFrame({
+  children,
   user,
 }: {
   children: ReactNode;
@@ -31,6 +59,7 @@ export function AppShell({
 }) {
   const currentPath = usePathname();
   const navItems = getNavigationItems(user.role, user.accessGrants);
+  const { isConnected, unreadNotificationCount } = useCommunicationRealtime();
 
   return (
     <div className="min-h-screen">
@@ -41,17 +70,27 @@ export function AppShell({
             {navItems.map((item) => (
               <Link
                 className={cn(
-                  "rounded-full px-4 py-2 text-sm text-muted",
+                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-muted",
                   currentPath.startsWith(item.href) ? "bg-card text-foreground" : "hover:bg-card",
                 )}
                 href={item.href}
                 key={item.href}
               >
                 {item.label}
+                {item.portal === UserPortal.MESSAGES && unreadNotificationCount > 0 ? (
+                  <span className="grid min-w-6 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                    {unreadNotificationCount}
+                  </span>
+                ) : null}
               </Link>
             ))}
           </div>
           <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+            {user.accessGrants.includes(UserPortal.MESSAGES) ? (
+              <Badge variant={isConnected ? "success" : "outline"}>
+                {isConnected ? "Live" : "Reconnecting"}
+              </Badge>
+            ) : null}
             <ThemeToggle />
             <div className="hidden min-w-0 items-center gap-3 rounded-full border border-border bg-card px-4 py-2 md:flex">
               <div className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -83,7 +122,7 @@ export function AppShell({
               {navItems.map((item) => (
                 <Link
                   className={cn(
-                    "block rounded-2xl px-4 py-3 text-sm",
+                    "flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm",
                     currentPath.startsWith(item.href)
                       ? "bg-primary/10 font-medium text-foreground"
                       : "text-muted hover:bg-card hover:text-foreground",
@@ -91,7 +130,12 @@ export function AppShell({
                   href={item.href}
                   key={item.href}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.portal === UserPortal.MESSAGES && unreadNotificationCount > 0 ? (
+                    <span className="grid min-w-6 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                      {unreadNotificationCount}
+                    </span>
+                  ) : null}
                 </Link>
               ))}
             </div>
@@ -103,13 +147,18 @@ export function AppShell({
             {navItems.map((item) => (
               <Link
                 className={cn(
-                  "rounded-full border border-border px-4 py-2 text-sm whitespace-nowrap",
+                  "inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm whitespace-nowrap",
                   currentPath.startsWith(item.href) ? "bg-card text-foreground" : "text-muted",
                 )}
                 href={item.href}
                 key={item.href}
               >
                 {item.label}
+                {item.portal === UserPortal.MESSAGES && unreadNotificationCount > 0 ? (
+                  <span className="grid min-w-6 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                    {unreadNotificationCount}
+                  </span>
+                ) : null}
               </Link>
             ))}
           </div>

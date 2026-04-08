@@ -80,6 +80,7 @@ const prisma = {
     create: vi.fn(),
     findMany: vi.fn(),
   },
+  $executeRaw: vi.fn(),
   $transaction: vi.fn(),
 } as const;
 
@@ -95,8 +96,19 @@ describe("communication service", () => {
     prisma.$transaction.mockImplementation(
       async (callback: (tx: typeof prisma) => unknown) => callback(prisma),
     );
+    prisma.$executeRaw.mockResolvedValue(1);
     prisma.userBlock.findFirst.mockResolvedValue(null);
-    prisma.notification.create.mockResolvedValue({});
+    prisma.notification.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+      id: "notification-1",
+      userId: String(data.userId),
+      actorId: data.actorId ? String(data.actorId) : null,
+      type: data.type,
+      title: String(data.title),
+      body: String(data.body),
+      actionUrl: data.actionUrl ? String(data.actionUrl) : null,
+      isRead: false,
+      createdAt: new Date("2026-04-08T10:00:00.000Z"),
+    }));
   });
 
   it("starts a direct conversation between a student and a mentor without needing a student connection", async () => {

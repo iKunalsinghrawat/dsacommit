@@ -26,9 +26,18 @@ import {
   createDirectConversationKey,
   requiresAcceptedConnectionForDirectConversation,
 } from "@/lib/communication";
+import type {
+  CommunicationRealtimeCall,
+  CommunicationRealtimeNotification,
+  CommunicationRealtimeUser,
+} from "@/lib/communication-realtime";
 import { prisma } from "@/lib/prisma";
 import { isRecoverableRuntimeError, logServerError } from "@/lib/runtime-guards";
 import { slugify } from "@/lib/utils";
+import {
+  publishCommunicationRealtimeEvent,
+  type RealtimeDbClient,
+} from "@/server/communication-realtime";
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -75,6 +84,138 @@ function getEmptyConnectionsPageData() {
   };
 }
 
+function toIsoString(value?: Date | string | null) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+
+  const normalized = new Date(value);
+  return Number.isNaN(normalized.getTime())
+    ? new Date().toISOString()
+    : normalized.toISOString();
+}
+
+function serializeRealtimeUser(
+  user: Partial<{
+    id: string;
+    name: string;
+    slug: string | null;
+    role: Role;
+    headline: string | null;
+    avatarUrl: string | null;
+    isVerified: boolean;
+    lastActiveAt: Date | string | null;
+  }>,
+): CommunicationRealtimeUser {
+  return {
+    id: user.id ?? "",
+    name: user.name ?? "Unknown user",
+    slug: user.slug ?? null,
+    role: user.role,
+    headline: user.headline ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+    isVerified: user.isVerified ?? false,
+    lastActiveAt: user.lastActiveAt ? toIsoString(user.lastActiveAt) : null,
+  };
+}
+
+function serializeNotificationForRealtime(notification: {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  actionUrl: string | null;
+  isRead: boolean;
+  createdAt: Date | string;
+  actor?: Partial<{
+    id: string;
+    name: string;
+    slug: string | null;
+    role: Role;
+    headline: string | null;
+    avatarUrl: string | null;
+    isVerified: boolean;
+    lastActiveAt: Date | string | null;
+  }> | null;
+}): CommunicationRealtimeNotification {
+  return {
+    id: notification.id,
+    type: notification.type,
+    title: notification.title,
+    body: notification.body,
+    actionUrl: notification.actionUrl,
+    isRead: notification.isRead,
+    createdAt: toIsoString(notification.createdAt),
+    actor: notification.actor ? serializeRealtimeUser(notification.actor) : null,
+  };
+}
+
+function serializeCallForRealtime(call: {
+  id: string;
+  conversationId: string;
+  callType: CallType;
+  status: CallSessionStatus;
+  initiatedById: string;
+  createdAt: Date | string;
+  startedAt?: Date | string | null;
+  endedAt?: Date | string | null;
+  participants: Array<{
+    userId: string;
+    status: CallParticipantStatus;
+    user: Partial<{
+      id: string;
+      name: string;
+      slug: string | null;
+      role: Role;
+      headline: string | null;
+      avatarUrl: string | null;
+      isVerified: boolean;
+      lastActiveAt: Date | string | null;
+    }>;
+  }>;
+}): CommunicationRealtimeCall {
+  const initiator =
+    call.participants.find((participant) => participant.userId === call.initiatedById)?.user ??
+    { id: call.initiatedById, name: "Unknown caller" };
+
+  return {
+    id: call.id,
+    conversationId: call.conversationId,
+    callType: call.callType,
+    status: call.status,
+    initiatedById: call.initiatedById,
+    initiatedBy: serializeRealtimeUser(initiator),
+    createdAt: toIsoString(call.createdAt),
+    startedAt: call.startedAt ? toIsoString(call.startedAt) : null,
+    endedAt: call.endedAt ? toIsoString(call.endedAt) : null,
+    participants: call.participants.map((participant) => ({
+      userId: participant.userId,
+      status: participant.status,
+      user: serializeRealtimeUser(participant.user),
+    })),
+  };
+}
+
+async function publishConversationUpdate(
+  client: RealtimeDbClient,
+  input: {
+    recipients: string[];
+    conversationId: string;
+    reason: string;
+    callSessionId?: string;
+  },
+) {
+  await publishCommunicationRealtimeEvent(client, {
+    type: "conversation:update",
+    recipients: input.recipients,
+    conversationId: input.conversationId,
+    callSessionId: input.callSessionId,
+    payload: {
+      reason: input.reason,
+    },
+  });
+}
+
 async function createUniqueGroupSlug(name: string) {
   const base = slugify(name);
   let suffix = 1;
@@ -117,6 +258,16 @@ async function createNotification(
   input: {
     userId: string;
     actorId?: string;
+    actor?: Partial<{
+      id: string;
+      name: string;
+      slug: string | null;
+      role: Role;
+      headline: string | null;
+      avatarUrl: string | null;
+      isVerified: boolean;
+      lastActiveAt: Date | string | null;
+    }>;
     type: NotificationType;
     title: string;
     body: string;
@@ -124,7 +275,7 @@ async function createNotification(
     metadata?: Prisma.InputJsonValue;
   },
 ) {
-  return tx.notification.create({
+  const notification = await tx.notification.create({
     data: {
       userId: input.userId,
       actorId: input.actorId,
@@ -135,6 +286,19 @@ async function createNotification(
       metadata: input.metadata,
     },
   });
+
+  await publishCommunicationRealtimeEvent(tx, {
+    type: "notification:new",
+    recipients: [input.userId],
+    payload: {
+      notification: serializeNotificationForRealtime({
+        ...notification,
+        actor: input.actor ?? null,
+      }),
+    },
+  });
+
+  return notification;
 }
 
 async function ensureDirectConversationPermissions(input: {
@@ -475,6 +639,62 @@ export async function getMessagesPageData(userId: string, role: Role) {
     }
 
     return getEmptyMessagesPageData();
+  }
+}
+
+export async function getCommunicationShellState(userId: string) {
+  try {
+    const [unreadNotificationCount, incomingCallParticipant] = await Promise.all([
+      prisma.notification.count({
+        where: {
+          userId,
+          isRead: false,
+        },
+      }),
+      prisma.callParticipant.findFirst({
+        where: {
+          userId,
+          status: CallParticipantStatus.INVITED,
+          callSession: {
+            status: CallSessionStatus.RINGING,
+          },
+        },
+        orderBy: {
+          invitedAt: "desc",
+        },
+        include: {
+          callSession: {
+            include: {
+              participants: {
+                include: {
+                  user: {
+                    select: communicationUserSelect,
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      unreadNotificationCount,
+      incomingCall: incomingCallParticipant
+        ? serializeCallForRealtime(incomingCallParticipant.callSession)
+        : null,
+    };
+  } catch (error) {
+    logServerError("getCommunicationShellState", error, { userId });
+
+    if (!isRecoverableRuntimeError(error)) {
+      throw error;
+    }
+
+    return {
+      unreadNotificationCount: 0,
+      incomingCall: null,
+    };
   }
 }
 
@@ -874,9 +1094,17 @@ export async function startDirectConversation(input: {
 }) {
   await ensureDirectConversationPermissions(input);
 
-  return prisma.$transaction(async (tx) =>
-    ensureDirectConversation(tx, input),
-  );
+  return prisma.$transaction(async (tx) => {
+    const conversationId = await ensureDirectConversation(tx, input);
+
+    await publishConversationUpdate(tx, {
+      recipients: [input.currentUserId, input.targetUserId],
+      conversationId,
+      reason: "conversation-started",
+    });
+
+    return conversationId;
+  });
 }
 
 export async function createGroup(input: {
@@ -1051,9 +1279,12 @@ export async function joinGroupOrCreateRequest(input: {
     },
   });
 
+  const requester = await findActiveCommunicationUser(input.currentUserId);
+
   await createNotification(prisma as TransactionClient, {
     userId: group.createdById,
     actorId: input.currentUserId,
+    actor: requester ?? undefined,
     type: NotificationType.GROUP_JOIN_REQUEST,
     title: "New group join request",
     body: "A student requested access to your study group.",
@@ -1370,6 +1601,7 @@ export async function sendConnectionRequest(input: {
   await createNotification(prisma as TransactionClient, {
     userId: input.targetUserId,
     actorId: input.currentUserId,
+    actor: currentUser,
     type: NotificationType.CONNECTION_REQUEST,
     title: "New connection request",
     body: `${currentUser.name} wants to connect with you.`,
@@ -1465,7 +1697,7 @@ export async function respondToConnectionRequest(input: {
       update: {},
     });
 
-    await ensureDirectConversation(tx, {
+    const conversationId = await ensureDirectConversation(tx, {
       currentUserId: request.senderId,
       targetUserId: request.receiverId,
     });
@@ -1473,6 +1705,7 @@ export async function respondToConnectionRequest(input: {
     await createNotification(tx, {
       userId: request.senderId,
       actorId: request.receiverId,
+      actor: request.receiver,
       type: NotificationType.CONNECTION_ACCEPTED,
       title: "Connection accepted",
       body: `${request.receiver.name} accepted your connection request.`,
@@ -1480,6 +1713,12 @@ export async function respondToConnectionRequest(input: {
       metadata: {
         requestId: request.id,
       },
+    });
+
+    await publishConversationUpdate(tx, {
+      recipients: [request.senderId, request.receiverId],
+      conversationId,
+      reason: "connection-accepted",
     });
 
     return request;
@@ -1642,6 +1881,28 @@ export async function sendMessage(input: {
       },
     });
 
+    await publishCommunicationRealtimeEvent(tx, {
+      type: "message:new",
+      recipients: participantIds,
+      conversationId: input.conversationId,
+      payload: {
+        message: {
+          id: message.id,
+          conversationId: input.conversationId,
+          senderId: input.currentUserId,
+          content: message.content,
+          createdAt: toIsoString(message.createdAt),
+          sender: serializeRealtimeUser(message.sender),
+        },
+      },
+    });
+
+    await publishConversationUpdate(tx, {
+      recipients: participantIds,
+      conversationId: input.conversationId,
+      reason: "message",
+    });
+
     const notificationTitle =
       participant.conversation.type === ConversationType.GROUP
         ? `New group message in ${participant.conversation.group?.name ?? "your group"}`
@@ -1659,6 +1920,7 @@ export async function sendMessage(input: {
           createNotification(tx, {
             userId: item.userId,
             actorId: input.currentUserId,
+            actor: message.sender,
             type: NotificationType.DIRECT_MESSAGE,
             title: notificationTitle,
             body: notificationBody,
@@ -1721,6 +1983,11 @@ export async function startCall(input: {
   }
 
   return prisma.$transaction(async (tx) => {
+    const caller =
+      participant.conversation.participants.find(
+        (item) => item.userId === input.currentUserId,
+      )?.user ?? null;
+
     const callSession = await tx.callSession.create({
       data: {
         conversationId: input.conversationId,
@@ -1741,13 +2008,20 @@ export async function startCall(input: {
         },
       },
       include: {
-        participants: true,
+        participants: {
+          include: {
+            user: {
+              select: communicationUserSelect,
+            },
+          },
+        },
       },
     });
 
     await createNotification(tx, {
       userId: otherParticipant.userId,
       actorId: input.currentUserId,
+      actor: caller ?? undefined,
       type: NotificationType.INCOMING_CALL,
       title: input.callType === CallType.VIDEO ? "Incoming video call" : "Incoming audio call",
       body: "Open the conversation to accept or decline the call.",
@@ -1755,6 +2029,23 @@ export async function startCall(input: {
       metadata: {
         callSessionId: callSession.id,
       },
+    });
+
+    await publishCommunicationRealtimeEvent(tx, {
+      type: "call:incoming",
+      recipients: [otherParticipant.userId],
+      conversationId: input.conversationId,
+      callSessionId: callSession.id,
+      payload: {
+        call: serializeCallForRealtime(callSession),
+      },
+    });
+
+    await publishConversationUpdate(tx, {
+      recipients: participant.conversation.participants.map((item) => item.userId),
+      conversationId: input.conversationId,
+      reason: "call-ringing",
+      callSessionId: callSession.id,
     });
 
     return callSession;
@@ -1807,6 +2098,7 @@ export async function updateCallParticipant(input: {
   );
 
   const now = new Date();
+  const participantUserIds = callSession.participants.map((participant) => participant.userId);
 
   return prisma.$transaction(async (tx) => {
     if (input.action === "ACCEPT" || input.action === "JOIN") {
@@ -1834,6 +2126,42 @@ export async function updateCallParticipant(input: {
             },
           },
         },
+      });
+
+      if (input.action === "ACCEPT" && callSession.initiatedById !== input.currentUserId) {
+        await createNotification(tx, {
+          userId: callSession.initiatedById,
+          actorId: input.currentUserId,
+          actor: currentParticipant.user,
+          type: NotificationType.CALL_ACCEPTED,
+          title: "Call accepted",
+          body: `${currentParticipant.user.name} joined your call.`,
+          actionUrl: `/messages/${callSession.conversationId}`,
+          metadata: {
+            callSessionId: callSession.id,
+          },
+        });
+      }
+
+      await publishCommunicationRealtimeEvent(tx, {
+        type: "call:accepted",
+        recipients: participantUserIds,
+        conversationId: callSession.conversationId,
+        callSessionId: callSession.id,
+        payload: {
+          call: serializeCallForRealtime({
+            ...updatedSession,
+            conversationId: callSession.conversationId,
+            initiatedById: callSession.initiatedById,
+          }),
+        },
+      });
+
+      await publishConversationUpdate(tx, {
+        recipients: participantUserIds,
+        conversationId: callSession.conversationId,
+        reason: input.action === "ACCEPT" ? "call-accepted" : "call-joined",
+        callSessionId: callSession.id,
       });
 
       return updatedSession;
@@ -1878,7 +2206,11 @@ export async function updateCallParticipant(input: {
         await createNotification(tx, {
           userId: callSession.initiatedById,
           actorId: input.currentUserId,
-          type: NotificationType.MISSED_CALL,
+          actor: currentParticipant.user,
+          type:
+            input.action === "DECLINE"
+              ? NotificationType.CALL_DECLINED
+              : NotificationType.MISSED_CALL,
           title: input.action === "DECLINE" ? "Call declined" : "Missed call",
           body:
             input.action === "DECLINE"
@@ -1890,6 +2222,27 @@ export async function updateCallParticipant(input: {
           },
         });
       }
+
+      await publishCommunicationRealtimeEvent(tx, {
+        type: input.action === "DECLINE" ? "call:declined" : "call:missed",
+        recipients: participantUserIds,
+        conversationId: callSession.conversationId,
+        callSessionId: callSession.id,
+        payload: {
+          call: serializeCallForRealtime({
+            ...updatedSession,
+            conversationId: callSession.conversationId,
+            initiatedById: callSession.initiatedById,
+          }),
+        },
+      });
+
+      await publishConversationUpdate(tx, {
+        recipients: participantUserIds,
+        conversationId: callSession.conversationId,
+        reason: input.action === "DECLINE" ? "call-declined" : "call-missed",
+        callSessionId: callSession.id,
+      });
 
       return updatedSession;
     }
@@ -1940,6 +2293,27 @@ export async function updateCallParticipant(input: {
               },
             });
 
+      await publishCommunicationRealtimeEvent(tx, {
+        type: "call:ended",
+        recipients: participantUserIds,
+        conversationId: callSession.conversationId,
+        callSessionId: callSession.id,
+        payload: {
+          call: serializeCallForRealtime({
+            ...updatedSession,
+            conversationId: callSession.conversationId,
+            initiatedById: callSession.initiatedById,
+          }),
+        },
+      });
+
+      await publishConversationUpdate(tx, {
+        recipients: participantUserIds,
+        conversationId: callSession.conversationId,
+        reason: "call-left",
+        callSessionId: callSession.id,
+      });
+
       return updatedSession;
     }
 
@@ -1975,7 +2349,8 @@ export async function updateCallParticipant(input: {
         createNotification(tx, {
           userId: participant.userId,
           actorId: input.currentUserId,
-          type: NotificationType.MISSED_CALL,
+          actor: currentParticipant.user,
+          type: NotificationType.CALL_ENDED,
           title: "Call ended",
           body: "The active call has ended.",
           actionUrl: `/messages/${callSession.conversationId}`,
@@ -1986,7 +2361,7 @@ export async function updateCallParticipant(input: {
       ),
     );
 
-    return tx.callSession.findUniqueOrThrow({
+    const refreshedSession = await tx.callSession.findUniqueOrThrow({
       where: { id: updatedSession.id },
       include: {
         participants: {
@@ -1998,6 +2373,29 @@ export async function updateCallParticipant(input: {
         },
       },
     });
+
+    await publishCommunicationRealtimeEvent(tx, {
+      type: "call:ended",
+      recipients: participantUserIds,
+      conversationId: callSession.conversationId,
+      callSessionId: callSession.id,
+      payload: {
+        call: serializeCallForRealtime({
+          ...refreshedSession,
+          conversationId: callSession.conversationId,
+          initiatedById: callSession.initiatedById,
+        }),
+      },
+    });
+
+    await publishConversationUpdate(tx, {
+      recipients: participantUserIds,
+      conversationId: callSession.conversationId,
+      reason: callSession.status === CallSessionStatus.RINGING ? "call-cancelled" : "call-ended",
+      callSessionId: callSession.id,
+    });
+
+    return refreshedSession;
   });
 }
 
@@ -2063,18 +2461,43 @@ export async function createCallSignal(input: {
     throw new Error("You do not have access to this call session.");
   }
 
-  return prisma.callSignal.create({
-    data: {
-      callSessionId: input.callSessionId,
-      senderId: input.currentUserId,
-      type: input.type,
-      payload: input.payload as Prisma.InputJsonValue,
-    },
-    include: {
-      sender: {
-        select: communicationUserSelect,
+  return prisma.$transaction(async (tx) => {
+    const signal = await tx.callSignal.create({
+      data: {
+        callSessionId: input.callSessionId,
+        senderId: input.currentUserId,
+        type: input.type,
+        payload: input.payload as Prisma.InputJsonValue,
       },
-    },
+      include: {
+        sender: {
+          select: communicationUserSelect,
+        },
+      },
+    });
+
+    const recipients = await tx.callParticipant.findMany({
+      where: {
+        callSessionId: input.callSessionId,
+        userId: {
+          not: input.currentUserId,
+        },
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    await publishCommunicationRealtimeEvent(tx, {
+      type: "call:signal",
+      recipients: recipients.map((item) => item.userId),
+      callSessionId: input.callSessionId,
+      payload: {
+        reason: input.type,
+      },
+    });
+
+    return signal;
   });
 }
 
@@ -2099,10 +2522,22 @@ export async function markNotificationRead(input: {
     return notification;
   }
 
-  return prisma.notification.update({
-    where: { id: notification.id },
-    data: {
-      isRead: true,
-    },
+  return prisma.$transaction(async (tx) => {
+    const updatedNotification = await tx.notification.update({
+      where: { id: notification.id },
+      data: {
+        isRead: true,
+      },
+    });
+
+    await publishCommunicationRealtimeEvent(tx, {
+      type: "notification:read",
+      recipients: [input.currentUserId],
+      payload: {
+        notificationId: notification.id,
+      },
+    });
+
+    return updatedNotification;
   });
 }

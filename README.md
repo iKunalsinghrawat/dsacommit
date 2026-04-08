@@ -238,6 +238,13 @@ Call signaling foundation:
 
 The current MVP stores call state, participants, and signaling events in PostgreSQL so a richer WebRTC transport layer can be plugged in later without changing the product data model.
 
+Realtime delivery:
+
+- `/api/realtime/communication` streams live communication events over Server-Sent Events
+- direct messages, notification badges, inbox refresh, and incoming call popups now update without a manual page refresh
+- call ringing uses a browser-safe ringtone flow that starts after the first user interaction unlocks audio
+- for production, set `REALTIME_DATABASE_URL` to a direct Postgres connection string when your main `DATABASE_URL` is pooled
+
 The seed now also creates:
 
 - student-to-student and student-to-mentor conversations
@@ -281,6 +288,7 @@ Important: Vercel documents that the Hobby plan is for non-commercial personal u
 4. In Vercel project settings, add:
 
 - `DATABASE_URL`
+- `REALTIME_DATABASE_URL` (recommended direct Postgres URL for SSE listeners)
 - `AUTH_SECRET`
 - `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
 - `AUTH_URL` (optional canonical runtime URL)
@@ -318,6 +326,7 @@ Use this when you want a no-cost public deployment without the Vercel Hobby non-
 5. Add these environment variables in Netlify:
 
 - `DATABASE_URL`
+- `REALTIME_DATABASE_URL` (recommended direct Postgres URL for SSE listeners)
 - `AUTH_SECRET`
 - `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
 - `AUTH_URL` (optional canonical runtime URL)
