@@ -716,6 +716,26 @@ export const topicSeed: TopicSeed[] = [
   },
 ];
 
+export type RoadmapItemSeed = {
+  title: string;
+  slug: string;
+  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+  summary: string;
+  details: string;
+  sortOrder: number;
+  topicSlug: string;
+};
+
+export const roadmapItemSeed: RoadmapItemSeed[] = topicSeed.map((topic) => ({
+  title: topic.name,
+  slug: `roadmap-${topic.slug}`,
+  level: topic.level,
+  summary: topic.conceptSummary,
+  details: `${topic.notes} Focus progression: ${topic.difficultyProgression.join(" -> ")}.`,
+  sortOrder: topic.sortOrder,
+  topicSlug: topic.slug,
+}));
+
 export type CompanySeed = {
   name: string;
   slug: string;

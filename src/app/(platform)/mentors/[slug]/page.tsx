@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Role, UserPortal } from "@/generated/prisma/enums";
+import { StartConversationButton } from "@/components/communication/communication-controls";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,12 +53,17 @@ export default async function MentorDetailPage({
           <CardContent className="space-y-4">
             <p className="text-sm leading-8 text-muted">{data.mentor.bio}</p>
             {user.role === Role.STUDENT ? (
-              <form action={toggleMentorFollowAction}>
-                <input name="mentorId" type="hidden" value={data.mentor.userId} />
-                <button className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground" type="submit">
-                  {data.isFollowing ? "Following mentor" : "Follow mentor"}
-                </button>
-              </form>
+              <div className="flex flex-wrap gap-3">
+                <form action={toggleMentorFollowAction}>
+                  <input name="mentorId" type="hidden" value={data.mentor.userId} />
+                  <button className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground" type="submit">
+                    {data.isFollowing ? "Following mentor" : "Follow mentor"}
+                  </button>
+                </form>
+                <StartConversationButton targetUserId={data.mentor.userId} variant="secondary">
+                  Message mentor
+                </StartConversationButton>
+              </div>
             ) : null}
           </CardContent>
         </Card>
@@ -122,8 +128,8 @@ export default async function MentorDetailPage({
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {data.recommendedProblems.map((problem) => (
-            <Link href={`/problems/${problem.id}`} key={problem.id}>
-              <div className="rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
+            <Link className="block h-full" href={`/problems/${problem.id}`} key={problem.id}>
+              <div className="h-full rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
                 <p className="font-medium">{problem.title}</p>
                 <p className="mt-2 text-sm text-muted">{problem.topic.name}</p>
               </div>

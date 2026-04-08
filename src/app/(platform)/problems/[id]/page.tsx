@@ -1,10 +1,18 @@
 import { notFound } from "next/navigation";
 
+import { ChangeRequestHistoryCard } from "@/components/approvals/change-request-history-card";
+import { ProblemRequestSection } from "@/components/approvals/problem-request-section";
 import { ProblemWorkspace } from "@/components/problems/problem-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { Role, SubmissionState, UserPortal } from "@/generated/prisma/enums";
+import {
+  ChangeRequestEntityType,
+  ChangeRequestOperationType,
+  Role,
+  SubmissionState,
+  UserPortal,
+} from "@/generated/prisma/enums";
 import {
   toggleBookmarkAction,
   toggleRevisionAction,
@@ -12,7 +20,11 @@ import {
 } from "@/lib/actions/platform-actions";
 import { requirePortalAccess, requireUser } from "@/lib/auth";
 import { titleCase } from "@/lib/utils";
-import { getProblemById } from "@/server/public-data";
+import {
+  getProblemChangeRequestRecord,
+  getUserChangeRequests,
+} from "@/server/content-change-requests";
+import { getCatalogMeta, getProblemById } from "@/server/public-data";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +36,19 @@ export default async function ProblemDetailPage({
   const { id } = await params;
   await requirePortalAccess(UserPortal.PROBLEMS);
   const user = await requireUser();
-  const data = await getProblemById(id, user.id);
+  const [data, meta, requestableProblem, requests] = await Promise.all([
+    getProblemById(id, user.id),
+    getCatalogMeta(),
+    getProblemChangeRequestRecord(id),
+    getUserChangeRequests({
+      userId: user.id,
+      entityTypes: [ChangeRequestEntityType.PROBLEM],
+      entityId: id,
+      limit: 6,
+    }),
+  ]);
 
-  if (!data) {
+  if (!data || !requestableProblem) {
     notFound();
   }
 
@@ -44,12 +66,12 @@ export default async function ProblemDetailPage({
             <CardTitle>Tracking actions</CardTitle>
             <CardDescription>Mark progress, save for later, or add to revision.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-3">
+          <CardContent className="grid gap-3 sm:flex sm:flex-wrap">
             <form action={updateProblemStatusAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
               <input name="status" type="hidden" value={SubmissionState.SOLVED} />
               <button
-                className="rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+                className="w-full rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground sm:w-auto"
                 type="submit"
               >
                 Mark solved
@@ -58,19 +80,19 @@ export default async function ProblemDetailPage({
             <form action={updateProblemStatusAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
               <input name="status" type="hidden" value={SubmissionState.ATTEMPTED} />
-              <button className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold" type="submit">
+              <button className="w-full rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold sm:w-auto" type="submit">
                 Mark attempted
               </button>
             </form>
             <form action={toggleBookmarkAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
-              <button className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold" type="submit">
+              <button className="w-full rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold sm:w-auto" type="submit">
                 {data.isBookmarked ? "Remove bookmark" : "Bookmark"}
               </button>
             </form>
             <form action={toggleRevisionAction}>
               <input name="problemId" type="hidden" value={data.problem.id} />
-              <button className="rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold" type="submit">
+              <button className="w-full rounded-full border border-border bg-card px-5 py-3 text-sm font-semibold sm:w-auto" type="submit">
                 {data.inRevisionQueue ? "Remove from revision" : "Revision later"}
               </button>
             </form>
@@ -181,6 +203,27 @@ export default async function ProblemDetailPage({
           ))}
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <ProblemRequestSection
+          availableModes={[ChangeRequestOperationType.UPDATE, ChangeRequestOperationType.DELETE]}
+          companies={meta.companies.map((company) => ({
+            id: company.id,
+            name: company.name,
+          }))}
+          currentProblem={requestableProblem}
+          topics={meta.topics.map((topic) => ({
+            id: topic.id,
+            name: topic.name,
+          }))}
+        />
+        <ChangeRequestHistoryCard
+          description="Requests for this live problem. The catalog and student view stay untouched until admin approval."
+          emptyLabel="No change requests have been submitted for this problem yet."
+          requests={requests}
+          title="Problem request status"
+        />
+      </div>
     </div>
   );
 }

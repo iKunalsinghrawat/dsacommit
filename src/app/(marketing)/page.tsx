@@ -5,6 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BRAND } from "@/data/platform-content";
+import {
+  getPublicCompaniesHref,
+  getPublicCompanyHref,
+  getPublicLeaderboardHref,
+  getPublicMentorHref,
+  getPublicMentorsHref,
+  getPublicProfileHref,
+  getPublicRoadmapHref,
+  getSignInHref,
+} from "@/lib/public-destinations";
 import { formatPercent, getInitials } from "@/lib/utils";
 import {
   getLandingPageData,
@@ -20,6 +30,9 @@ export default async function HomePage() {
     getRoadmapData(),
     getLeaderboard(),
   ]);
+  const roadmapEntries = Object.entries(roadmap) as Array<
+    [keyof typeof roadmap, (typeof roadmap)[keyof typeof roadmap]]
+  >;
 
   return (
     <main>
@@ -40,7 +53,7 @@ export default async function HomePage() {
               </Link>
             </Button>
             <Button asChild size="lg" variant="secondary">
-              <Link href="/roadmap">Explore the roadmap</Link>
+              <Link href={getPublicRoadmapHref()}>Explore the roadmap</Link>
             </Button>
           </div>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -105,26 +118,32 @@ export default async function HomePage() {
             <h2 className="mt-4 text-3xl font-semibold tracking-tight">Target the companies that actually matter to you.</h2>
           </div>
           <Button asChild variant="ghost">
-            <Link href="/companies">See all companies</Link>
+            <Link href={getPublicCompaniesHref()}>See all companies</Link>
           </Button>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {landing.featuredCompanies.map((company) => (
-            <Card key={company.id}>
-              <CardHeader>
-                <CardTitle>{company.name}</CardTitle>
-                <CardDescription>{company.overview}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {company.commonFocusTopics.slice(0, 4).map((topic) => (
-                    <Badge key={topic} variant="outline">
-                      {topic.replace(/-/g, " ")}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <Link
+              className="block h-full rounded-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              href={getPublicCompanyHref(company.slug)}
+              key={company.id}
+            >
+              <Card className="h-full cursor-pointer transition-transform duration-200 hover:-translate-y-1 hover:border-primary/30">
+                <CardHeader>
+                  <CardTitle>{company.name}</CardTitle>
+                  <CardDescription>{company.overview}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {company.commonFocusTopics.slice(0, 4).map((topic) => (
+                      <Badge key={topic} variant="outline">
+                        {topic.replace(/-/g, " ")}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </section>
@@ -136,66 +155,90 @@ export default async function HomePage() {
             <h2 className="mt-4 text-3xl font-semibold tracking-tight">Mentor guidance that rewards discipline, not noise.</h2>
           </div>
           <Button asChild variant="ghost">
-            <Link href="/mentors">Browse mentors</Link>
+            <Link href={getPublicMentorsHref()}>Browse mentors</Link>
           </Button>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {landing.featuredMentors.map((mentor) => (
-            <Card key={mentor.userId}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 font-semibold text-primary">
-                      {getInitials(mentor.user.name)}
+            <Link
+              className="block h-full rounded-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              href={getPublicMentorHref(mentor.user.slug)}
+              key={mentor.userId}
+            >
+              <Card className="h-full cursor-pointer transition-transform duration-200 hover:-translate-y-1 hover:border-primary/30">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 font-semibold text-primary">
+                        {getInitials(mentor.user.name)}
+                      </div>
+                      <div>
+                        <CardTitle>{mentor.user.name}</CardTitle>
+                        <CardDescription>
+                          {mentor.roleTitle} at {mentor.company?.name}
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle>{mentor.user.name}</CardTitle>
-                      <CardDescription>
-                        {mentor.roleTitle} at {mentor.company?.name}
-                      </CardDescription>
-                    </div>
+                    <Badge variant="success">{mentor.followers.length} followers</Badge>
                   </div>
-                  <Badge variant="success">{mentor.followers.length} followers</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm leading-7 text-muted">{mentor.bio}</p>
-                <div className="flex flex-wrap gap-2">
-                  {mentor.expertiseTags.map((tag) => (
-                    <Badge key={tag} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm leading-7 text-muted">{mentor.bio}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {mentor.expertiseTags.map((tag) => (
+                      <Badge key={tag} variant="outline">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </section>
 
       <section className="page-shell py-8" id="roadmap">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div>
           <span className="section-kicker">Structured roadmap</span>
           <h2 className="mt-4 text-3xl font-semibold tracking-tight">Students always know what to do next.</h2>
+          </div>
+          <Button asChild variant="ghost">
+            <Link href={getPublicRoadmapHref()}>Open roadmap preview</Link>
+          </Button>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {Object.entries(roadmap).map(([level, topics]) => (
-            <Card key={level}>
-              <CardHeader>
-                <CardTitle>{level.toLowerCase().replace(/^\w/, (char) => char.toUpperCase())}</CardTitle>
-                <CardDescription>{topics.length} focused topics with notes, quizzes, and revision checklists.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {topics.map((topic) => (
-                  <div className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-3" key={topic.id}>
-                    <span className="font-medium">{topic.name}</span>
-                    <span className="text-xs uppercase tracking-[0.24em] text-muted">
-                      {topic.problems.length} problems
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+          {roadmapEntries.map(([level, topics]) => (
+            <Link
+              className="block h-full rounded-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              href={getPublicRoadmapHref(level)}
+              key={level}
+            >
+              <Card className="h-full cursor-pointer transition-transform duration-200 hover:-translate-y-1 hover:border-primary/30">
+                <CardHeader>
+                  <CardTitle>{level.toLowerCase().replace(/^\w/, (char) => char.toUpperCase())}</CardTitle>
+                  <CardDescription>
+                    {topics.length} focused roadmap checkpoints with notes, quizzes, and revision checklists.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {topics.map((item) => (
+                    <div className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-3" key={item.id}>
+                      <div>
+                        <p className="font-medium">{item.title}</p>
+                        {item.topic ? (
+                          <p className="text-xs uppercase tracking-[0.24em] text-muted">{item.topic.name}</p>
+                        ) : null}
+                      </div>
+                      <span className="text-xs uppercase tracking-[0.24em] text-muted">
+                        {item.topic?.problems.length ?? 0} problems
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </section>
@@ -212,13 +255,19 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {landing.featuredChallenges.map((challenge) => (
-                <div className="rounded-2xl border border-border bg-background/60 p-4" key={challenge.id}>
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="font-semibold">{challenge.title}</p>
-                    <Badge variant="success">{challenge.durationDays} days</Badge>
+                <Link
+                  className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  href={getSignInHref("/dashboard")}
+                  key={challenge.id}
+                >
+                  <div className="rounded-2xl border border-border bg-background/60 p-4 transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary/30">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="font-semibold">{challenge.title}</p>
+                      <Badge variant="success">{challenge.durationDays} days</Badge>
+                    </div>
+                    <p className="text-sm leading-7 text-muted">{challenge.description}</p>
                   </div>
-                  <p className="text-sm leading-7 text-muted">{challenge.description}</p>
-                </div>
+                </Link>
               ))}
             </CardContent>
           </Card>
@@ -230,18 +279,24 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {landing.wallPosts.map((post) => (
-                <div className="rounded-2xl border border-border bg-background/50 p-4" key={post.id}>
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{post.user.name}</p>
-                      <p className="text-xs uppercase tracking-[0.24em] text-muted">
-                        {post.minutesCommitted} mins committed
-                      </p>
+                <Link
+                  className="block rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  href={getPublicProfileHref(post.user.slug)}
+                  key={post.id}
+                >
+                  <div className="rounded-2xl border border-border bg-background/50 p-4 transition-transform duration-200 hover:-translate-y-0.5 hover:border-primary/30">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{post.user.name}</p>
+                        <p className="text-xs uppercase tracking-[0.24em] text-muted">
+                          {post.minutesCommitted} mins committed
+                        </p>
+                      </div>
+                      <Badge variant="outline">{post.solvedCount} solved</Badge>
                     </div>
-                    <Badge variant="outline">{post.solvedCount} solved</Badge>
+                    <p className="text-sm leading-7 text-muted">{post.caption}</p>
                   </div>
-                  <p className="text-sm leading-7 text-muted">{post.caption}</p>
-                </div>
+                </Link>
               ))}
             </CardContent>
           </Card>
@@ -254,31 +309,42 @@ export default async function HomePage() {
             <span className="section-kicker">Leaderboard preview</span>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight">Consistency beats chaos.</h2>
           </div>
-          <Trophy className="size-8 text-warning" />
+          <div className="flex items-center gap-3">
+            <Trophy className="size-8 text-warning" />
+            <Button asChild variant="ghost">
+              <Link href={getPublicLeaderboardHref()}>View leaderboard</Link>
+            </Button>
+          </div>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {leaderboard.slice(0, 6).map((student, index) => (
-            <Card key={student.id}>
-              <CardContent className="flex items-center justify-between gap-4 p-5">
-                <div className="flex items-center gap-4">
-                  <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 font-semibold text-primary">
-                    #{index + 1}
+            <Link
+              className="block h-full rounded-[32px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              href={getPublicLeaderboardHref(student.id)}
+              key={student.id}
+            >
+              <Card className="h-full cursor-pointer transition-transform duration-200 hover:-translate-y-1 hover:border-primary/30">
+                <CardContent className="flex items-center justify-between gap-4 p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="grid size-12 place-items-center rounded-2xl bg-primary/10 font-semibold text-primary">
+                      #{index + 1}
+                    </div>
+                    <div>
+                      <p className="font-semibold">{student.name}</p>
+                      <p className="text-sm text-muted">{student.headline}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold">{student.name}</p>
-                    <p className="text-sm text-muted">{student.headline}</p>
+                  <div className="text-right">
+                    <p className="text-2xl font-semibold">
+                      {student.studentProfile ? Math.round(student.studentProfile.commitmentScore) : 0}
+                    </p>
+                    <p className="text-xs uppercase tracking-[0.24em] text-muted">
+                      {formatPercent(student.studentProfile?.weeklyConsistencyScore ?? 0)} weekly consistency
+                    </p>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-semibold">
-                    {student.studentProfile ? Math.round(student.studentProfile.commitmentScore) : 0}
-                  </p>
-                  <p className="text-xs uppercase tracking-[0.24em] text-muted">
-                    {formatPercent(student.studentProfile?.weeklyConsistencyScore ?? 0)} weekly consistency
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       </section>

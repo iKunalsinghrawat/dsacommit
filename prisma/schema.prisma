@@ -21,6 +21,11 @@ enum UserStatus {
   DELETED
 }
 
+enum ProfileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
 enum UserPortal {
   DASHBOARD
   ROADMAP
@@ -30,6 +35,9 @@ enum UserPortal {
   MENTORS
   COMMUNITY
   PROFILE
+  MESSAGES
+  GROUPS
+  CONNECTIONS
   COMPANY_PORTAL
   ADMIN_PORTAL
   MODERATION
@@ -112,6 +120,95 @@ enum CompanyContentType {
   EVENT
 }
 
+enum GroupPrivacy {
+  PUBLIC
+  PRIVATE
+}
+
+enum GroupJoinPolicy {
+  OPEN
+  APPROVAL
+}
+
+enum GroupMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum GroupJoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ConversationType {
+  DIRECT
+  GROUP
+}
+
+enum ConversationParticipantRole {
+  MEMBER
+  ADMIN
+}
+
+enum MessageType {
+  TEXT
+  SYSTEM
+}
+
+enum ConnectionRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum NotificationType {
+  DIRECT_MESSAGE
+  CONNECTION_REQUEST
+  CONNECTION_ACCEPTED
+  GROUP_JOIN_REQUEST
+  GROUP_JOIN_APPROVED
+  GROUP_JOIN_REJECTED
+  MISSED_CALL
+  INCOMING_CALL
+  CALL_ACCEPTED
+  CALL_DECLINED
+  CALL_ENDED
+}
+
+enum CallType {
+  AUDIO
+  VIDEO
+}
+
+enum CallSessionStatus {
+  RINGING
+  ACTIVE
+  ENDED
+  MISSED
+  DECLINED
+  CANCELLED
+}
+
+enum CallParticipantStatus {
+  INVITED
+  JOINED
+  DECLINED
+  MISSED
+  LEFT
+}
+
+enum SignalingEventType {
+  OFFER
+  ANSWER
+  ICE_CANDIDATE
+  HANGUP
+  READY
+}
+
 enum MentorQuestionStatus {
   OPEN
   ANSWERED
@@ -134,131 +231,228 @@ enum BadgeRarity {
   LEGENDARY
 }
 
+enum ChangeRequestEntityType {
+  TOPIC
+  ROADMAP_ITEM
+  PROBLEM
+}
+
+enum ChangeRequestOperationType {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id               String                @id @default(cuid())
-  email            String                @unique
-  passwordHash     String
-  name             String
-  slug             String                @unique
-  role             Role
-  status           UserStatus            @default(ACTIVE)
-  accessGrants     UserPortal[]          @default([])
-  avatarUrl        String?
-  headline         String?
-  bio              String?
-  location         String?
-  githubUrl        String?
-  linkedinUrl      String?
-  portfolioUrl     String?
-  isVerified       Boolean               @default(false)
-  isFeatured       Boolean               @default(false)
-  isOnboarded      Boolean               @default(false)
-  passwordResetRequired Boolean          @default(false)
-  sessionVersion   Int                   @default(0)
-  deletedAt        DateTime?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  lastActiveAt     DateTime?
-  studentProfile   StudentProfile?
-  mentorProfile    MentorProfile?
-  ownedCompany     CompanyProfile?       @relation("CompanyOwner")
-  submissionStatus SubmissionStatus[]
-  bookmarks        Bookmark[]
-  revisionQueue    RevisionQueue[]
-  dailyCheckins    DailyCheckin[]
-  streak           Streak?
-  participations   ChallengeParticipation[]
-  commitmentPosts  CommitmentPost[]
-  communityPosts   CommunityPost[]       @relation("CommunityAuthor")
-  comments         Comment[]
-  postLikes        PostLike[]
-  progress         Progress[]
-  userBadges       UserBadge[]
-  codeDrafts       CodeDraft[]
-  codeSubmissions  CodeSubmission[]
+  id                         String                    @id @default(cuid())
+  email                      String                    @unique
+  passwordHash               String
+  name                       String
+  slug                       String                    @unique
+  role                       Role
+  status                     UserStatus                @default(ACTIVE)
+  profileVisibility          ProfileVisibility         @default(PUBLIC)
+  accessGrants               UserPortal[]              @default([])
+  avatarUrl                  String?
+  headline                   String?
+  bio                        String?
+  location                   String?
+  githubUrl                  String?
+  linkedinUrl                String?
+  portfolioUrl               String?
+  isVerified                 Boolean                   @default(false)
+  isFeatured                 Boolean                   @default(false)
+  isOnboarded                Boolean                   @default(false)
+  passwordResetRequired      Boolean                   @default(false)
+  sessionVersion             Int                       @default(0)
+  deletedAt                  DateTime?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  lastActiveAt               DateTime?
+  studentProfile             StudentProfile?
+  mentorProfile              MentorProfile?
+  ownedCompany               CompanyProfile?           @relation("CompanyOwner")
+  submissionStatus           SubmissionStatus[]
+  bookmarks                  Bookmark[]
+  revisionQueue              RevisionQueue[]
+  dailyCheckins              DailyCheckin[]
+  streak                     Streak?
+  participations             ChallengeParticipation[]
+  commitmentPosts            CommitmentPost[]
+  communityPosts             CommunityPost[]           @relation("CommunityAuthor")
+  comments                   Comment[]
+  postLikes                  PostLike[]
+  progress                   Progress[]
+  userBadges                 UserBadge[]
+  codeDrafts                 CodeDraft[]
+  codeSubmissions            CodeSubmission[]
+  requestedChangeRequests    ChangeRequest[]           @relation("ChangeRequestRequester")
+  reviewedChangeRequests     ChangeRequest[]           @relation("ChangeRequestReviewer")
+  changeRequestReviews       ChangeRequestReview[]
+  createdGroups              Group[]                   @relation("GroupCreator")
+  groupMemberships           GroupMember[]             @relation("GroupMemberUser")
+  addedGroupMembers          GroupMember[]             @relation("GroupMemberAdder")
+  groupJoinRequests          GroupJoinRequest[]        @relation("GroupJoinRequester")
+  reviewedGroupJoinRequests  GroupJoinRequest[]        @relation("GroupJoinReviewer")
+  sentConnectionRequests     ConnectionRequest[]       @relation("ConnectionRequestSender")
+  receivedConnectionRequests ConnectionRequest[]       @relation("ConnectionRequestReceiver")
+  connectionsOne             UserConnection[]          @relation("ConnectionUserOne")
+  connectionsTwo             UserConnection[]          @relation("ConnectionUserTwo")
+  blocksInitiated            UserBlock[]               @relation("UserBlocker")
+  blocksReceived             UserBlock[]               @relation("BlockedUser")
+  createdConversations       Conversation[]            @relation("ConversationCreator")
+  conversationParticipants   ConversationParticipant[]
+  sentMessages               DirectMessage[]           @relation("MessageSender")
+  messageReadStates          MessageReadState[]
+  notifications              Notification[]            @relation("NotificationRecipient")
+  triggeredNotifications     Notification[]            @relation("NotificationActor")
+  initiatedCallSessions      CallSession[]             @relation("CallInitiator")
+  callParticipants           CallParticipant[]
+  sentCallSignals            CallSignal[]              @relation("CallSignalSender")
 
   @@index([role, isFeatured])
   @@index([status, role])
 }
 
 model StudentProfile {
-  userId                  String                @id
-  currentLevel            StudentLevel
-  target                  CareerTarget
-  dailyAvailableHours     Int
-  preferredLanguage       String
-  weeklyConsistencyScore  Int                   @default(0)
-  monthlyCommitmentScore  Int                   @default(0)
-  commitmentScore         Int                   @default(0)
-  questionsSolvedCount    Int                   @default(0)
-  bookmarkedCount         Int                   @default(0)
-  revisionCount           Int                   @default(0)
-  challengePoints         Int                   @default(0)
-  about                   String?
-  user                    User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  targetCompanies         StudentTargetCompany[]
-  weakTopics              StudentWeakTopic[]
-  mentorFollows           MentorFollower[]
-  mentorQuestions         MentorQuestion[]
+  userId                 String                 @id
+  currentLevel           StudentLevel
+  target                 CareerTarget
+  dailyAvailableHours    Int
+  preferredLanguage      String
+  weeklyConsistencyScore Int                    @default(0)
+  monthlyCommitmentScore Int                    @default(0)
+  commitmentScore        Int                    @default(0)
+  questionsSolvedCount   Int                    @default(0)
+  bookmarkedCount        Int                    @default(0)
+  revisionCount          Int                    @default(0)
+  challengePoints        Int                    @default(0)
+  about                  String?
+  user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCompanies        StudentTargetCompany[]
+  weakTopics             StudentWeakTopic[]
+  mentorFollows          MentorFollower[]
+  mentorQuestions        MentorQuestion[]
 
   @@index([currentLevel, target])
 }
 
 model MentorProfile {
-  userId                 String          @id
-  companyId              String?
-  roleTitle              String
-  experienceYears        Int
-  bio                    String
-  expertiseTags          String[]
-  verifiedBadge          Boolean         @default(false)
-  featured               Boolean         @default(false)
-  officeHours            String?
-  recommendedSetTitle    String?
-  recommendedSetSummary  String?
-  user                   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  company                CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  mentorPosts            MentorPost[]
-  followers              MentorFollower[]
-  questions              MentorQuestion[]
+  userId                String           @id
+  companyId             String?
+  roleTitle             String
+  experienceYears       Int
+  bio                   String
+  expertiseTags         String[]
+  verifiedBadge         Boolean          @default(false)
+  featured              Boolean          @default(false)
+  officeHours           String?
+  recommendedSetTitle   String?
+  recommendedSetSummary String?
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company               CompanyProfile?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  mentorPosts           MentorPost[]
+  followers             MentorFollower[]
+  questions             MentorQuestion[]
 
   @@index([companyId, featured])
 }
 
 model CompanyProfile {
-  id                String          @id @default(cuid())
-  ownerId           String?         @unique
-  name              String          @unique
-  slug              String          @unique
-  overview          String
-  industry          String?
-  website           String?
-  hiringFocusAreas  String[]
-  commonFocusTopics String[]
-  rolePreferences   String[]
-  oaPattern         String[]
-  interviewRounds   String[]
-  preparationTips   String[]
+  id                 String                 @id @default(cuid())
+  ownerId            String?                @unique
+  name               String                 @unique
+  slug               String                 @unique
+  overview           String
+  industry           String?
+  website            String?
+  hiringFocusAreas   String[]
+  commonFocusTopics  String[]
+  rolePreferences    String[]
+  oaPattern          String[]
+  interviewRounds    String[]
+  preparationTips    String[]
   recommendedRoadmap String[]
-  featured          Boolean         @default(false)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  owner             User?           @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  mentors           MentorProfile[]
-  mentorPosts       MentorPost[]
-  roles             CompanyRole[]
-  contents          CompanyContent[]
-  problemTags       ProblemCompanyTag[]
-  targetStudents    StudentTargetCompany[]
-  communityPosts    CommunityPost[]
+  featured           Boolean                @default(false)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  owner              User?                  @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  mentors            MentorProfile[]
+  mentorPosts        MentorPost[]
+  roles              CompanyRole[]
+  contents           CompanyContent[]
+  problemTags        ProblemCompanyTag[]
+  targetStudents     StudentTargetCompany[]
+  communityPosts     CommunityPost[]
 
   @@index([featured])
 }
 
+model Group {
+  id           String             @id @default(cuid())
+  slug         String             @unique
+  name         String
+  description  String
+  imageUrl     String?
+  category     String?
+  privacy      GroupPrivacy       @default(PUBLIC)
+  joinPolicy   GroupJoinPolicy    @default(OPEN)
+  createdById  String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  createdBy    User               @relation("GroupCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members      GroupMember[]
+  joinRequests GroupJoinRequest[]
+  conversation Conversation?
+
+  @@index([createdById, createdAt])
+  @@index([privacy, updatedAt])
+}
+
+model GroupMember {
+  id        String          @id @default(cuid())
+  groupId   String
+  userId    String
+  role      GroupMemberRole @default(MEMBER)
+  joinedAt  DateTime        @default(now())
+  addedById String?
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User            @relation("GroupMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  addedBy   User?           @relation("GroupMemberAdder", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([groupId, userId])
+  @@index([userId, joinedAt])
+}
+
+model GroupJoinRequest {
+  id           String                 @id @default(cuid())
+  groupId      String
+  requesterId  String
+  status       GroupJoinRequestStatus @default(PENDING)
+  message      String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  group        Group                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester    User                   @relation("GroupJoinRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewedBy   User?                  @relation("GroupJoinReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([groupId, requesterId])
+  @@index([requesterId, status, createdAt])
+  @@index([groupId, status, createdAt])
+}
+
 model Topic {
-  id                    String          @id @default(cuid())
-  name                  String          @unique
-  slug                  String          @unique
+  id                    String             @id @default(cuid())
+  name                  String             @unique
+  slug                  String             @unique
   level                 RoadmapLevel
   sortOrder             Int
   conceptSummary        String
@@ -269,46 +463,70 @@ model Topic {
   estimatedHours        Int
   icon                  String
   accentColor           String
+  isArchived            Boolean            @default(false)
+  archivedAt            DateTime?
   problems              Problem[]
   weakStudents          StudentWeakTopic[]
   progress              Progress[]
   communityPosts        CommunityPost[]
+  roadmapItems          RoadmapItem[]
 
-  @@index([level, sortOrder])
+  @@index([level, sortOrder, isArchived])
 }
 
 model Problem {
-  id                String             @id @default(cuid())
-  title             String
-  slug              String             @unique
-  difficulty        Difficulty
-  topicId           String
-  problemStatement  String
-  examples          Json
-  constraints       String[]
-  hints             String[]
-  editorial         String
-  similarProblemSlugs String[]
-  roleFocus         String?
-  frequency         Int                @default(3)
-  estimatedMinutes  Int
-  isFeatured        Boolean            @default(false)
-  codeExecutionEnabled Boolean         @default(false)
-  starterCode       String?
-  starterLanguage   CodeLanguage       @default(TYPESCRIPT)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  topic             Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  companyTags       ProblemCompanyTag[]
-  submissionStatus  SubmissionStatus[]
-  bookmarks         Bookmark[]
-  revisionQueue     RevisionQueue[]
-  testCases         ProblemTestCase[]
-  codeDrafts        CodeDraft[]
-  codeSubmissions   CodeSubmission[]
+  id                   String              @id @default(cuid())
+  title                String
+  slug                 String              @unique
+  difficulty           Difficulty
+  topicId              String
+  problemStatement     String
+  examples             Json
+  constraints          String[]
+  hints                String[]
+  editorial            String
+  similarProblemSlugs  String[]
+  roleFocus            String?
+  frequency            Int                 @default(3)
+  estimatedMinutes     Int
+  isFeatured           Boolean             @default(false)
+  codeExecutionEnabled Boolean             @default(false)
+  starterCode          String?
+  starterLanguage      CodeLanguage        @default(TYPESCRIPT)
+  isArchived           Boolean             @default(false)
+  archivedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  topic                Topic               @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  companyTags          ProblemCompanyTag[]
+  submissionStatus     SubmissionStatus[]
+  bookmarks            Bookmark[]
+  revisionQueue        RevisionQueue[]
+  testCases            ProblemTestCase[]
+  codeDrafts           CodeDraft[]
+  codeSubmissions      CodeSubmission[]
 
-  @@index([topicId, difficulty])
+  @@index([topicId, difficulty, isArchived])
   @@index([isFeatured, frequency])
+}
+
+model RoadmapItem {
+  id         String       @id @default(cuid())
+  title      String
+  slug       String       @unique
+  level      RoadmapLevel
+  summary    String
+  details    String
+  sortOrder  Int
+  topicId    String?
+  isArchived Boolean      @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  topic      Topic?       @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([level, sortOrder, isArchived])
+  @@index([topicId, isArchived])
 }
 
 model ProblemCompanyTag {
@@ -326,35 +544,35 @@ model ProblemCompanyTag {
 }
 
 model Progress {
-  id                  String   @id @default(cuid())
-  userId              String
-  topicId             String
-  solvedProblemsCount Int      @default(0)
-  totalProblemsSnapshot Int    @default(0)
-  completionPercentage Float   @default(0)
-  confidenceScore     Int      @default(0)
-  note                String?
-  lastPracticedAt     DateTime?
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  topic               Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(cuid())
+  userId                String
+  topicId               String
+  solvedProblemsCount   Int       @default(0)
+  totalProblemsSnapshot Int       @default(0)
+  completionPercentage  Float     @default(0)
+  confidenceScore       Int       @default(0)
+  note                  String?
+  lastPracticedAt       DateTime?
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic                 Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
   @@unique([userId, topicId])
   @@index([completionPercentage])
 }
 
 model SubmissionStatus {
-  id              String          @id @default(cuid())
-  userId          String
-  problemId       String
-  status          SubmissionState
-  attempts        Int             @default(0)
-  language        String?
+  id               String          @id @default(cuid())
+  userId           String
+  problemId        String
+  status           SubmissionState
+  attempts         Int             @default(0)
+  language         String?
   timeSpentMinutes Int?
-  note            String?
-  solvedAt        DateTime?
-  lastViewedAt    DateTime        @default(now())
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problem         Problem         @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  note             String?
+  solvedAt         DateTime?
+  lastViewedAt     DateTime        @default(now())
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem          Problem         @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([userId, problemId])
   @@index([userId, status])
@@ -438,45 +656,45 @@ model RevisionQueue {
 }
 
 model DailyCheckin {
-  id              String          @id @default(cuid())
-  userId          String
-  date            DateTime
+  id               String          @id @default(cuid())
+  userId           String
+  date             DateTime
   minutesCommitted Int
-  targetMinutes   Int
-  note            String?
-  solvedCount     Int             @default(0)
-  pointsEarned    Int             @default(0)
-  sharedToWall    Boolean         @default(false)
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  commitmentPost  CommitmentPost?
+  targetMinutes    Int
+  note             String?
+  solvedCount      Int             @default(0)
+  pointsEarned     Int             @default(0)
+  sharedToWall     Boolean         @default(false)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commitmentPost   CommitmentPost?
 
   @@unique([userId, date])
   @@index([date])
 }
 
 model Streak {
-  userId          String   @id
-  currentStreak   Int      @default(0)
-  bestStreak      Int      @default(0)
-  totalCheckins   Int      @default(0)
+  userId          String    @id
+  currentStreak   Int       @default(0)
+  bestStreak      Int       @default(0)
+  totalCheckins   Int       @default(0)
   lastCheckinDate DateTime?
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Challenge {
-  id            String                 @id @default(cuid())
-  title         String
-  slug          String                 @unique
-  description   String
-  type          ChallengeType
-  durationDays  Int
-  targetValue   Int
-  badgeId       String?
-  isFeatured    Boolean                @default(false)
-  startDate     DateTime
-  endDate       DateTime
-  createdAt     DateTime               @default(now())
-  badge         Badge?                 @relation("ChallengeReward", fields: [badgeId], references: [id], onDelete: SetNull)
+  id             String                   @id @default(cuid())
+  title          String
+  slug           String                   @unique
+  description    String
+  type           ChallengeType
+  durationDays   Int
+  targetValue    Int
+  badgeId        String?
+  isFeatured     Boolean                  @default(false)
+  startDate      DateTime
+  endDate        DateTime
+  createdAt      DateTime                 @default(now())
+  badge          Badge?                   @relation("ChallengeReward", fields: [badgeId], references: [id], onDelete: SetNull)
   participations ChallengeParticipation[]
 
   @@index([isFeatured, startDate])
@@ -499,38 +717,38 @@ model ChallengeParticipation {
 }
 
 model CommitmentPost {
-  id              String       @id @default(cuid())
-  userId          String
-  checkinId       String?      @unique
-  caption         String
+  id               String        @id @default(cuid())
+  userId           String
+  checkinId        String?       @unique
+  caption          String
   minutesCommitted Int
-  solvedCount     Int          @default(0)
-  isPublic        Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  checkin         DailyCheckin? @relation(fields: [checkinId], references: [id], onDelete: SetNull)
+  solvedCount      Int           @default(0)
+  isPublic         Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  checkin          DailyCheckin? @relation(fields: [checkinId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
 }
 
 model CommunityPost {
-  id          String            @id @default(cuid())
-  authorId    String
-  topicId     String?
-  companyId   String?
-  type        CommunityPostType
-  title       String
-  content     String
-  likeCount   Int               @default(0)
-  commentCount Int              @default(0)
-  isReported  Boolean           @default(false)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  author      User              @relation("CommunityAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  topic       Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
-  company     CompanyProfile?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  comments    Comment[]
-  likes       PostLike[]
+  id           String            @id @default(cuid())
+  authorId     String
+  topicId      String?
+  companyId    String?
+  type         CommunityPostType
+  title        String
+  content      String
+  likeCount    Int               @default(0)
+  commentCount Int               @default(0)
+  isReported   Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  author       User              @relation("CommunityAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  topic        Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  company      CompanyProfile?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  comments     Comment[]
+  likes        PostLike[]
 
   @@index([type, createdAt])
   @@index([isReported])
@@ -561,17 +779,17 @@ model PostLike {
 }
 
 model Badge {
-  id              String      @id @default(cuid())
-  name            String
-  slug            String      @unique
-  description     String
-  criteria        String
-  category        BadgeCategory
-  rarity          BadgeRarity
-  icon            String
-  pointValue      Int         @default(0)
-  users           UserBadge[]
-  challengeRewards Challenge[] @relation("ChallengeReward")
+  id               String        @id @default(cuid())
+  name             String
+  slug             String        @unique
+  description      String
+  criteria         String
+  category         BadgeCategory
+  rarity           BadgeRarity
+  icon             String
+  pointValue       Int           @default(0)
+  users            UserBadge[]
+  challengeRewards Challenge[]   @relation("ChallengeReward")
 }
 
 model UserBadge {
@@ -618,17 +836,17 @@ model MentorFollower {
 }
 
 model MentorPost {
-  id                   String          @id @default(cuid())
-  mentorId             String
-  companyId            String?
-  title                String
-  excerpt              String
-  content              String
-  tags                 String[]
+  id                      String          @id @default(cuid())
+  mentorId                String
+  companyId               String?
+  title                   String
+  excerpt                 String
+  content                 String
+  tags                    String[]
   recommendedProblemSlugs String[]
-  createdAt            DateTime        @default(now())
-  mentor               MentorProfile   @relation(fields: [mentorId], references: [userId], onDelete: Cascade)
-  company              CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt               DateTime        @default(now())
+  mentor                  MentorProfile   @relation(fields: [mentorId], references: [userId], onDelete: Cascade)
+  company                 CompanyProfile? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([mentorId, createdAt])
 }
@@ -671,4 +889,212 @@ model CompanyContent {
   company   CompanyProfile     @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, category, createdAt])
+}
+
+model ConnectionRequest {
+  id          String                  @id @default(cuid())
+  senderId    String
+  receiverId  String
+  status      ConnectionRequestStatus @default(PENDING)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  respondedAt DateTime?
+  sender      User                    @relation("ConnectionRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User                    @relation("ConnectionRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId, status, createdAt])
+  @@index([senderId, status, createdAt])
+}
+
+model UserConnection {
+  id        String   @id @default(cuid())
+  userOneId String
+  userTwoId String
+  createdAt DateTime @default(now())
+  userOne   User     @relation("ConnectionUserOne", fields: [userOneId], references: [id], onDelete: Cascade)
+  userTwo   User     @relation("ConnectionUserTwo", fields: [userTwoId], references: [id], onDelete: Cascade)
+
+  @@unique([userOneId, userTwoId])
+  @@index([userOneId, createdAt])
+  @@index([userTwoId, createdAt])
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("UserBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId, createdAt])
+}
+
+model Conversation {
+  id                 String                    @id @default(cuid())
+  type               ConversationType
+  directKey          String?                   @unique
+  groupId            String?                   @unique
+  createdById        String?
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  group              Group?                    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy          User?                     @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  participants       ConversationParticipant[]
+  messages           DirectMessage[]
+  callSessions       CallSession[]
+
+  @@index([type, updatedAt])
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  id             String                      @id @default(cuid())
+  conversationId String
+  userId         String
+  role           ConversationParticipantRole @default(MEMBER)
+  joinedAt       DateTime                    @default(now())
+  lastReadAt     DateTime?
+  isArchived     Boolean                     @default(false)
+  conversation   Conversation                @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, lastReadAt])
+}
+
+model DirectMessage {
+  id             String             @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  type           MessageType        @default(TEXT)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  editedAt       DateTime?
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User               @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  readStates     MessageReadState[]
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model MessageReadState {
+  id          String        @id @default(cuid())
+  messageId   String
+  userId      String
+  deliveredAt DateTime?
+  readAt      DateTime?
+  message     DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, readAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  actorId   String?
+  type      NotificationType
+  title     String
+  body      String
+  actionUrl String?
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor     User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model CallSession {
+  id             String            @id @default(cuid())
+  conversationId String
+  initiatedById  String
+  callType       CallType
+  status         CallSessionStatus @default(RINGING)
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  initiatedBy    User              @relation("CallInitiator", fields: [initiatedById], references: [id], onDelete: Cascade)
+  participants   CallParticipant[]
+  signals        CallSignal[]
+
+  @@index([conversationId, status, createdAt])
+  @@index([initiatedById, createdAt])
+}
+
+model CallParticipant {
+  id            String                @id @default(cuid())
+  callSessionId String
+  userId        String
+  status        CallParticipantStatus @default(INVITED)
+  invitedAt     DateTime              @default(now())
+  joinedAt      DateTime?
+  leftAt        DateTime?
+  callSession   CallSession           @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callSessionId, userId])
+  @@index([userId, status, invitedAt])
+}
+
+model CallSignal {
+  id            String             @id @default(cuid())
+  callSessionId String
+  senderId      String
+  type          SignalingEventType
+  payload       Json
+  createdAt     DateTime           @default(now())
+  callSession   CallSession        @relation(fields: [callSessionId], references: [id], onDelete: Cascade)
+  sender        User               @relation("CallSignalSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([callSessionId, createdAt])
+}
+
+model ChangeRequest {
+  id              String                     @id @default(cuid())
+  entityType      ChangeRequestEntityType
+  operationType   ChangeRequestOperationType
+  status          ChangeRequestStatus        @default(PENDING)
+  entityId        String?
+  summary         String
+  requestedData   Json
+  currentData     Json?
+  rejectionReason String?
+  requestedById   String
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  requestedBy     User                       @relation("ChangeRequestRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy      User?                      @relation("ChangeRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviews         ChangeRequestReview[]
+
+  @@index([status, entityType, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([entityType, entityId])
+}
+
+model ChangeRequestReview {
+  id         String              @id @default(cuid())
+  requestId  String
+  reviewerId String
+  status     ChangeRequestStatus
+  note       String?
+  createdAt  DateTime            @default(now())
+  request    ChangeRequest       @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewer   User                @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@index([reviewerId, createdAt])
 }

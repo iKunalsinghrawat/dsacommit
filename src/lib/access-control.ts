@@ -17,6 +17,9 @@ export const userPortalLabels: Record<UserPortal, string> = {
   [UserPortal.MENTORS]: "Mentors",
   [UserPortal.COMMUNITY]: "Community",
   [UserPortal.PROFILE]: "Profile",
+  [UserPortal.MESSAGES]: "Messages",
+  [UserPortal.GROUPS]: "Groups",
+  [UserPortal.CONNECTIONS]: "Connections",
   [UserPortal.COMPANY_PORTAL]: "Company portal",
   [UserPortal.ADMIN_PORTAL]: "Admin portal",
   [UserPortal.MODERATION]: "Moderation",
@@ -33,6 +36,9 @@ const defaultAccessGrantsByRole: Record<Role, UserPortal[]> = {
     UserPortal.MENTORS,
     UserPortal.COMMUNITY,
     UserPortal.PROFILE,
+    UserPortal.MESSAGES,
+    UserPortal.GROUPS,
+    UserPortal.CONNECTIONS,
     UserPortal.POSTING,
   ],
   [Role.MENTOR]: [
@@ -43,6 +49,7 @@ const defaultAccessGrantsByRole: Record<Role, UserPortal[]> = {
     UserPortal.MENTORS,
     UserPortal.COMMUNITY,
     UserPortal.PROFILE,
+    UserPortal.MESSAGES,
     UserPortal.POSTING,
   ],
   [Role.COMPANY]: [
@@ -62,11 +69,20 @@ const defaultAccessGrantsByRole: Record<Role, UserPortal[]> = {
     UserPortal.MENTORS,
     UserPortal.COMMUNITY,
     UserPortal.PROFILE,
+    UserPortal.MESSAGES,
+    UserPortal.GROUPS,
+    UserPortal.CONNECTIONS,
     UserPortal.COMPANY_PORTAL,
     UserPortal.ADMIN_PORTAL,
     UserPortal.MODERATION,
     UserPortal.POSTING,
   ],
+};
+
+const legacySocialPortalFallbackByRole: Partial<Record<Role, UserPortal[]>> = {
+  [Role.STUDENT]: [UserPortal.MESSAGES, UserPortal.GROUPS, UserPortal.CONNECTIONS],
+  [Role.MENTOR]: [UserPortal.MESSAGES],
+  [Role.ADMIN]: [UserPortal.MESSAGES, UserPortal.GROUPS, UserPortal.CONNECTIONS],
 };
 
 export const navigationItems: Array<{
@@ -82,6 +98,9 @@ export const navigationItems: Array<{
   { href: "/companies", label: "Companies", portal: UserPortal.COMPANIES, roles: [Role.STUDENT, Role.MENTOR, Role.COMPANY, Role.ADMIN] },
   { href: "/mentors", label: "Mentors", portal: UserPortal.MENTORS, roles: [Role.STUDENT, Role.MENTOR, Role.ADMIN] },
   { href: "/community", label: "Community", portal: UserPortal.COMMUNITY, roles: [Role.STUDENT, Role.MENTOR, Role.COMPANY, Role.ADMIN] },
+  { href: "/messages", label: "Messages", portal: UserPortal.MESSAGES, roles: [Role.STUDENT, Role.MENTOR, Role.ADMIN] },
+  { href: "/groups", label: "Groups", portal: UserPortal.GROUPS, roles: [Role.STUDENT, Role.ADMIN] },
+  { href: "/connections", label: "Connections", portal: UserPortal.CONNECTIONS, roles: [Role.STUDENT, Role.ADMIN] },
   { href: "/company-portal", label: "Company Portal", portal: UserPortal.COMPANY_PORTAL, roles: [Role.COMPANY, Role.ADMIN] },
   { href: "/admin", label: "Admin", portal: UserPortal.ADMIN_PORTAL, roles: [Role.ADMIN] },
   { href: "/profile", label: "Profile", portal: UserPortal.PROFILE, roles: [Role.STUDENT, Role.MENTOR, Role.COMPANY, Role.ADMIN] },
@@ -96,7 +115,15 @@ export function normalizeAccessGrants(role: Role, accessGrants?: UserPortal[] | 
     return getDefaultAccessGrants(role);
   }
 
-  return [...new Set(accessGrants)];
+  const grants = [...new Set(accessGrants)];
+  const socialFallback = legacySocialPortalFallbackByRole[role] ?? [];
+  const hasAnySocialPortal = socialFallback.some((portal) => grants.includes(portal));
+
+  if (!hasAnySocialPortal && socialFallback.length) {
+    return [...new Set([...grants, ...socialFallback])];
+  }
+
+  return grants;
 }
 
 export function isRestrictedStatus(status: UserStatus) {

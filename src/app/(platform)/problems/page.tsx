@@ -1,6 +1,13 @@
 import Link from "next/link";
 
-import { Role, UserPortal } from "@/generated/prisma/enums";
+import {
+  ChangeRequestEntityType,
+  ChangeRequestOperationType,
+  Role,
+  UserPortal,
+} from "@/generated/prisma/enums";
+import { ChangeRequestHistoryCard } from "@/components/approvals/change-request-history-card";
+import { ProblemRequestSection } from "@/components/approvals/problem-request-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,6 +15,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { requirePortalAccess, requireUser } from "@/lib/auth";
 import { titleCase } from "@/lib/utils";
+import { getUserChangeRequests } from "@/server/content-change-requests";
 import { getCatalogMeta, getProblemsList, getStudentProblemState } from "@/server/public-data";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +41,11 @@ export default async function ProblemsPage({
     }),
     user.role === Role.STUDENT ? getStudentProblemState(user.id) : null,
   ]);
+  const requests = await getUserChangeRequests({
+    userId: user.id,
+    entityTypes: [ChangeRequestEntityType.PROBLEM],
+    limit: 6,
+  });
 
   return (
     <div className="space-y-8">
@@ -95,8 +108,8 @@ export default async function ProblemsPage({
           const attempted = state?.attempted.has(problem.id) ?? false;
 
           return (
-            <Link href={`/problems/${problem.id}`} key={problem.id}>
-              <Card className="hover:border-primary/30">
+            <Link className="block h-full" href={`/problems/${problem.id}`} key={problem.id}>
+              <Card className="h-full hover:border-primary/30">
                 <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-3">
@@ -121,6 +134,25 @@ export default async function ProblemsPage({
             </Link>
           );
         })}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <ProblemRequestSection
+          availableModes={[ChangeRequestOperationType.CREATE]}
+          companies={meta.companies.map((companyItem) => ({
+            id: companyItem.id,
+            name: companyItem.name,
+          }))}
+          topics={meta.topics.map((topicItem) => ({
+            id: topicItem.id,
+            name: topicItem.name,
+          }))}
+        />
+        <ChangeRequestHistoryCard
+          description="Create requests from the problem catalog appear here and stay pending until an admin reviews them."
+          requests={requests}
+          title="Problem request history"
+        />
       </div>
     </div>
   );

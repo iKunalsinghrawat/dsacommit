@@ -29,11 +29,15 @@ DSA Commit is a production-ready full-stack MVP for disciplined DSA preparation.
 - Roadmap, topic library, and topic detail pages
 - Problem catalog and problem detail pages with hints, editorial, company tags, bookmark/revision/solve tracking
 - Multi-language code workspace with per-problem per-language draft saving
+- Request-based approval workflow for roadmap items, topics, and problems
+- Profile settings with public/private visibility controls
+- Public profile pages that guests can view without signing in when visibility is set to `Public`
 - Company pages with focus areas, OA pattern, interview rounds, tips, and tagged questions
 - Mentor pages with follow, doubt posting, and guidance content
+- Social communication system with direct chat, study groups, connection requests, blocks, notifications, and audio/video call session tracking
 - Community feed with post creation, likes, and comments
 - Company portal with role publishing, guidance/event publishing, and committed student discovery
-- Admin panel for featured content and moderation
+- Admin panel for featured content, moderation, and content approvals
 
 ## Database
 
@@ -45,8 +49,25 @@ Main models include:
 - `StudentProfile`
 - `MentorProfile`
 - `CompanyProfile`
+- `Group`
+- `GroupMember`
+- `GroupJoinRequest`
+- `ConnectionRequest`
+- `UserConnection`
+- `UserBlock`
+- `Conversation`
+- `ConversationParticipant`
+- `DirectMessage`
+- `MessageReadState`
+- `Notification`
+- `CallSession`
+- `CallParticipant`
+- `CallSignal`
 - `Topic`
+- `RoadmapItem`
 - `Problem`
+- `ChangeRequest`
+- `ChangeRequestReview`
 - `CodeDraft`
 - `ProblemCompanyTag`
 - `Progress`
@@ -135,6 +156,17 @@ npm run db:seed
 npm run db:studio
 ```
 
+## Code execution configuration
+
+The coding workspace runner uses these environment variables:
+
+- `CODE_EXECUTION_PROVIDER`
+- `JUDGE0_API_URL`
+- `JUDGE0_AUTH_HEADER`
+- `JUDGE0_AUTH_TOKEN`
+
+The default `.env.example` values enable the public Judge0 CE runner for local development.
+
 ## Multi-language workspace
 
 The coding workspace now supports:
@@ -161,17 +193,70 @@ The last selected language also persists per problem after refresh.
 
 Current execution support:
 
-- `JavaScript`
-- `TypeScript`
+- `JavaScript` and `TypeScript` run in the built-in local sandbox
+- `C`, `C++`, `Java`, `Python`, `Go`, `C#`, `Kotlin`, and `Rust` run through the configurable Judge0-backed remote runner
 
-The remaining languages already have:
+If you want higher reliability or more throughput, point `JUDGE0_API_URL` at your own Judge0 deployment and set `JUDGE0_AUTH_TOKEN` if your provider requires authentication.
 
-- syntax highlighting
-- language-specific starter templates
-- per-language draft persistence
-- execution-ready backend branching
+## Content approval workflow
 
-This means a real sandbox or judge can be plugged in later without changing the workspace UI model.
+Roadmap items, topics, and problems now use a request-based moderation flow:
+
+- users with access to the relevant portal can submit `CREATE`, `UPDATE`, and `DELETE` requests
+- live content is never changed on submit
+- admins review requests from `/admin/approvals`
+- approved requests publish to the live tables
+- rejected requests keep the live content unchanged and store the rejection reason
+
+The seed now creates sample pending, approved, and rejected change requests so the approval queue is visible right away after `npm run db:seed`.
+
+## Social and communication system
+
+The platform now includes a communication MVP for students and mentors:
+
+- direct messaging for `student ↔ student` and `student ↔ mentor`
+- student connection requests with accept, reject, cancel, and remove flows
+- block / unblock rules that shut down messaging, requests, and call attempts
+- public and private study groups with join approvals
+- group chat for members
+- notifications for messages, connection requests, group approvals, and incoming calls
+- audio / video call session controls with a DB-backed signaling foundation
+
+New protected routes:
+
+- `/messages`
+- `/messages/[conversationId]`
+- `/groups`
+- `/groups/create`
+- `/groups/[slug]`
+- `/connections`
+
+Call signaling foundation:
+
+- `GET /api/calls/[callSessionId]/signals`
+- `POST /api/calls/[callSessionId]/signals`
+
+The current MVP stores call state, participants, and signaling events in PostgreSQL so a richer WebRTC transport layer can be plugged in later without changing the product data model.
+
+Realtime delivery:
+
+- `/api/realtime/communication` streams live communication events over Server-Sent Events
+- direct messages, notification badges, inbox refresh, and incoming call popups now update without a manual page refresh
+- call ringing uses a browser-safe ringtone flow that starts after the first user interaction unlocks audio
+- audio calls now request microphone permission with `getUserMedia({ audio: true })`
+- video calls now request camera + microphone permission with `getUserMedia({ video: true, audio: true })`
+- live calls now exchange `READY`, `OFFER`, `ANSWER`, `ICE_CANDIDATE`, and `HANGUP` events over the existing signaling API
+- browser notifications are now routed through `public/communication-sw.js` so incoming calls and messages can alert users when the tab is in the background
+- for production, set `REALTIME_DATABASE_URL` to a direct Postgres connection string when your main `DATABASE_URL` is pooled
+- for production WebRTC, set `NEXT_PUBLIC_WEBRTC_STUN_URLS` and optionally TURN credentials if your users are often behind strict NATs
+
+The seed now also creates:
+
+- student-to-student and student-to-mentor conversations
+- a public group and a private approval-based group
+- pending connection and join requests
+- a blocked-user example
+- notifications and an active ringing call example
 
 ## Docker
 
@@ -208,13 +293,23 @@ Important: Vercel documents that the Hobby plan is for non-commercial personal u
 4. In Vercel project settings, add:
 
 - `DATABASE_URL`
+- `REALTIME_DATABASE_URL` (recommended direct Postgres URL for SSE listeners)
+- `NEXT_PUBLIC_WEBRTC_STUN_URLS` (comma-separated STUN URLs, optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_URL` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_USERNAME` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL` (optional)
 - `AUTH_SECRET`
+- `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
+- `AUTH_URL` (optional canonical runtime URL)
+- `NEXTAUTH_URL` (optional legacy URL alias)
 - `SEED_DEFAULT_PASSWORD`
 - `NEXT_PUBLIC_APP_URL`
 
-5. Set `NEXT_PUBLIC_APP_URL` to your production domain if you already know it. If not, you can leave it blank for the first deploy because the app now falls back to Vercel system URLs automatically.
-6. Deploy the app.
-7. Run database setup once against production:
+5. Set either `AUTH_SECRET` or `NEXTAUTH_SECRET`. The app accepts both, but `AUTH_SECRET` is the primary name.
+6. Set either `AUTH_URL`, `NEXTAUTH_URL`, or `NEXT_PUBLIC_APP_URL` to your production domain if you already know it. If not, you can leave them blank for the first deploy because the app now falls back to Vercel system URLs automatically.
+   If an old `localhost` value is still present in production, the app now ignores it and prefers the Vercel runtime URL.
+7. Deploy the app.
+8. Run database setup once against production:
 
 ```bash
 npx prisma migrate deploy
@@ -240,12 +335,21 @@ Use this when you want a no-cost public deployment without the Vercel Hobby non-
 5. Add these environment variables in Netlify:
 
 - `DATABASE_URL`
+- `REALTIME_DATABASE_URL` (recommended direct Postgres URL for SSE listeners)
+- `NEXT_PUBLIC_WEBRTC_STUN_URLS` (comma-separated STUN URLs, optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_URL` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_USERNAME` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL` (optional)
 - `AUTH_SECRET`
+- `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
+- `AUTH_URL` (optional canonical runtime URL)
+- `NEXTAUTH_URL` (optional legacy URL alias)
 - `SEED_DEFAULT_PASSWORD`
 - `NEXT_PUBLIC_APP_URL`
 
-6. Deploy the site.
-7. Run database setup once against production:
+6. Set either `AUTH_SECRET` or `NEXTAUTH_SECRET`. The app accepts both, but `AUTH_SECRET` is the primary name.
+7. Deploy the site.
+8. Run database setup once against production:
 
 ```bash
 npx prisma migrate deploy
@@ -293,11 +397,13 @@ prisma/
 
 ## Known limitations
 
-- Real code execution is currently active for JavaScript and TypeScript only. Other workspace languages are fully available in draft mode and are ready for future sandbox integration.
+- JavaScript and TypeScript run locally, while the remaining languages depend on Judge0 availability. For production reliability and higher throughput, use a dedicated Judge0 deployment instead of the public CE endpoint.
 - Community moderation is intentionally lightweight.
 - Mentor mock interview slot booking is represented as a workflow placeholder rather than a calendar integration.
 - Company portal is single-owner in this MVP rather than multi-member.
 - Search is filter-driven and server-rendered, not full-text indexed yet.
+- Browser notifications currently cover open/background web sessions through the Notification API + service worker. Fully closed-tab mobile push delivery still needs a later Push API subscription + server push layer.
+- The WebRTC call flow now works with STUN by default, but truly reliable cross-network production calling still benefits from a TURN server.
 
 ## Next-phase improvements
 

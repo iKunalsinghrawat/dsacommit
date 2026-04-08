@@ -98,6 +98,8 @@ describe("ProblemWorkspace", () => {
     expect(selector.querySelectorAll("option")).toHaveLength(10);
     expect(screen.getByRole("option", { name: "C++" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Rust" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run code" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Submit code" })).toBeEnabled();
   });
 
   it("hydrates language-specific drafts from local storage and preserves code while switching", async () => {
@@ -198,6 +200,46 @@ describe("ProblemWorkspace", () => {
 
     await waitFor(() => {
       expect((screen.getByLabelText("Language") as HTMLSelectElement).value).toBe(CodeLanguage.RUST);
+    });
+  });
+
+  it("keeps Run Code and Submit Code enabled for remote languages like Python", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ProblemWorkspace
+        codeDrafts={[]}
+        latestCodeSubmissions={[]}
+        problemExamples={[
+          {
+            input: "1 2",
+            output: "3",
+            explanation: "1 + 2 = 3",
+          },
+        ]}
+        problemId="problem-2"
+        problemTitle="Sum Check"
+        starterCode={"export function solve(input: string): string {\n  return \"\";\n}\n"}
+        starterLanguage={CodeLanguage.TYPESCRIPT}
+        visibleTestCases={[
+          {
+            id: "tc-1",
+            label: "Sample 1",
+            input: "1 2",
+            expectedOutput: "3",
+            isHidden: false,
+            sortOrder: 1,
+          },
+        ]}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText("Language"), CodeLanguage.PYTHON);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Run code" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Submit code" })).toBeEnabled();
+      expect(screen.getAllByText("Remote runner ready").length).toBeGreaterThan(0);
     });
   });
 });

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   CareerTarget,
+  ProfileVisibility,
   Role,
   StudentLevel,
   UserPortal,
@@ -128,6 +129,7 @@ describe("user management actions", () => {
     formData.set("slug", "updated-student");
     formData.set("role", Role.STUDENT);
     formData.set("status", UserStatus.ACTIVE);
+    formData.set("profileVisibility", ProfileVisibility.PUBLIC);
     formData.set("studentCurrentLevel", StudentLevel.INTERMEDIATE);
     formData.set("studentTarget", CareerTarget.PLACEMENT);
     formData.set("studentDailyAvailableHours", "3");
@@ -144,7 +146,14 @@ describe("user management actions", () => {
         where: { id: "user-1" },
         data: expect.objectContaining({
           role: Role.STUDENT,
-          accessGrants: [UserPortal.DASHBOARD, UserPortal.PROBLEMS, UserPortal.PROFILE],
+          accessGrants: expect.arrayContaining([
+            UserPortal.DASHBOARD,
+            UserPortal.PROBLEMS,
+            UserPortal.PROFILE,
+            UserPortal.MESSAGES,
+            UserPortal.GROUPS,
+            UserPortal.CONNECTIONS,
+          ]),
         }),
       }),
     );
@@ -160,6 +169,7 @@ describe("user management actions", () => {
     formData.set("slug", "student-two");
     formData.set("role", Role.STUDENT);
     formData.set("status", UserStatus.ACTIVE);
+    formData.set("profileVisibility", ProfileVisibility.PUBLIC);
     formData.set("studentCurrentLevel", StudentLevel.BEGINNER);
     formData.set("studentTarget", CareerTarget.INTERNSHIP);
     formData.set("studentDailyAvailableHours", "2");
@@ -271,6 +281,7 @@ describe("user management actions", () => {
       role: Role.STUDENT,
       email: "student-1@dsacommit.dev",
       status: UserStatus.ACTIVE,
+      profileVisibility: ProfileVisibility.PUBLIC,
       accessGrants: [UserPortal.PROFILE, UserPortal.DASHBOARD],
       isVerified: false,
       isFeatured: false,
@@ -280,6 +291,7 @@ describe("user management actions", () => {
     const formData = new FormData();
     formData.set("name", "Self Updated");
     formData.set("slug", "self-updated");
+    formData.set("profileVisibility", ProfileVisibility.PRIVATE);
     formData.set("bio", "Focused on fixing recursion and graph confidence.");
     formData.set("studentCurrentLevel", StudentLevel.INTERMEDIATE);
     formData.set("studentTarget", CareerTarget.SWITCH);
@@ -296,6 +308,7 @@ describe("user management actions", () => {
         data: expect.objectContaining({
           name: "Self Updated",
           bio: "Focused on fixing recursion and graph confidence.",
+          profileVisibility: ProfileVisibility.PRIVATE,
         }),
       }),
     );

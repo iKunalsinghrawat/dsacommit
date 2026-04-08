@@ -2,8 +2,18 @@ import Link from "next/link";
 
 import { SignUpForm } from "@/components/auth/signup-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getSafeRedirectPath, getSignInHref } from "@/lib/public-destinations";
 
-export default function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const rawSearchParams = await searchParams;
+  const nextPath = getSafeRedirectPath(
+    typeof rawSearchParams.next === "string" ? rawSearchParams.next : undefined,
+  );
+
   return (
     <main className="page-shell py-12">
       <div className="mb-8 max-w-3xl space-y-4">
@@ -24,10 +34,10 @@ export default function SignUpPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6">
-          <SignUpForm />
+          <SignUpForm nextPath={nextPath ?? undefined} />
           <p className="mt-6 text-sm text-muted">
             Already have an account?{" "}
-            <Link className="font-semibold text-primary" href="/auth/signin">
+            <Link className="font-semibold text-primary" href={getSignInHref(nextPath)}>
               Sign in
             </Link>
           </p>

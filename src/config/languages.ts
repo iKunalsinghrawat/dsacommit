@@ -1,6 +1,6 @@
 import { CodeLanguage } from "@/generated/prisma/enums";
 
-export type CodeLanguageExecutionMode = "local" | "planned";
+export type CodeLanguageExecutionMode = "local" | "remote";
 
 export type CodeStarterTemplateContext = {
   problemTitle: string;
@@ -17,6 +17,7 @@ export type CodeLanguageConfig = {
   fileExtension: string;
   versionLabel: string;
   executionMode: CodeLanguageExecutionMode;
+  judge0NamePatterns: RegExp[];
   defaultTemplate: (context: CodeStarterTemplateContext) => string;
 };
 
@@ -72,7 +73,8 @@ export const languageConfig = {
     monacoLanguage: "c",
     fileExtension: "c",
     versionLabel: "GCC 13.x",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^C \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.C,
@@ -86,7 +88,8 @@ export const languageConfig = {
     monacoLanguage: "cpp",
     fileExtension: "cpp",
     versionLabel: "G++ 13.x",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^C\+\+ \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.CPP,
@@ -100,7 +103,8 @@ export const languageConfig = {
     monacoLanguage: "java",
     fileExtension: "java",
     versionLabel: "OpenJDK 21",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^Java \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.JAVA,
@@ -114,7 +118,8 @@ export const languageConfig = {
     monacoLanguage: "python",
     fileExtension: "py",
     versionLabel: "Python 3.11",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^Python \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.PYTHON,
@@ -129,6 +134,7 @@ export const languageConfig = {
     fileExtension: "js",
     versionLabel: "Node.js 20.x",
     executionMode: "local",
+    judge0NamePatterns: [/^JavaScript \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.JAVASCRIPT,
@@ -143,6 +149,7 @@ export const languageConfig = {
     fileExtension: "ts",
     versionLabel: "TypeScript 5.x",
     executionMode: "local",
+    judge0NamePatterns: [/^TypeScript \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.TYPESCRIPT,
@@ -156,7 +163,8 @@ export const languageConfig = {
     monacoLanguage: "go",
     fileExtension: "go",
     versionLabel: "Go 1.22",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^Go \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.GO,
@@ -170,7 +178,8 @@ export const languageConfig = {
     monacoLanguage: "cs",
     fileExtension: "cs",
     versionLabel: ".NET 8",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^C# \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.CSHARP,
@@ -184,7 +193,8 @@ export const languageConfig = {
     monacoLanguage: "kt",
     fileExtension: "kt",
     versionLabel: "Kotlin 1.9",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^Kotlin \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.KOTLIN,
@@ -198,7 +208,8 @@ export const languageConfig = {
     monacoLanguage: "rs",
     fileExtension: "rs",
     versionLabel: "Rust 1.77",
-    executionMode: "planned",
+    executionMode: "remote",
+    judge0NamePatterns: [/^Rust \(/i],
     defaultTemplate: (context) =>
       maybeUseProblemStarterCode(
         CodeLanguage.RUST,
@@ -227,10 +238,18 @@ export function supportsLocalExecution(language: CodeLanguage) {
   return getLanguageConfig(language).executionMode === "local";
 }
 
+export function usesRemoteExecution(language: CodeLanguage) {
+  return getLanguageConfig(language).executionMode === "remote";
+}
+
+export function supportsExecution(language: CodeLanguage) {
+  return supportsLocalExecution(language) || usesRemoteExecution(language);
+}
+
 export function getExecutionUnavailableMessage(language: CodeLanguage) {
   const config = getLanguageConfig(language);
 
-  return `${config.label} draft support is ready, but code execution for this runtime is not configured yet.`;
+  return `${config.label} execution is currently unavailable. Check the configured code execution provider and try again.`;
 }
 
 export function createStarterTemplateForLanguage(

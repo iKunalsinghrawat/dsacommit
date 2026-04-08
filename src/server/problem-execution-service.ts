@@ -6,18 +6,17 @@ import {
   Role,
   SubmissionState,
 } from "@/generated/prisma/enums";
-import {
-  getExecutionUnavailableMessage,
-  supportsLocalExecution,
-} from "@/config/languages";
-import {
-  executeProblemCode,
-} from "@/lib/problem-execution";
 import { prisma } from "@/lib/prisma";
 import { refreshStudentProfile } from "@/lib/student-progress";
+import {
+  canExecuteLanguage as canRunLanguage,
+  executeProblemCodeWithProvider,
+  getUnsupportedExecutionMessage as getExecutionProviderUnavailableMessage,
+} from "@/server/code-execution-provider";
+import type { ExecutionResponse } from "@/lib/problem-execution";
 
 function getPrimaryErrorMessage(
-  result: ReturnType<typeof executeProblemCode>,
+  result: ExecutionResponse,
 ) {
   return result.results.find((item) => item.errorMessage)?.errorMessage ?? null;
 }
@@ -59,7 +58,7 @@ export async function runProblemCode(input: {
 
   const visibleCases = problem.testCases.filter((testCase) => !testCase.isHidden);
 
-  return executeProblemCode({
+  return executeProblemCodeWithProvider({
     code: input.code,
     language: input.language,
     testCases: visibleCases,
@@ -80,7 +79,7 @@ export async function submitProblemCode(input: {
     return null;
   }
 
-  const result = executeProblemCode({
+  const result = await executeProblemCodeWithProvider({
     code: input.code,
     language: input.language,
     testCases: problem.testCases,
@@ -142,11 +141,11 @@ export async function submitProblemCode(input: {
 }
 
 export function getUnsupportedExecutionMessage(language: CodeLanguage) {
-  return getExecutionUnavailableMessage(language);
+  return getExecutionProviderUnavailableMessage(language);
 }
 
 export function canExecuteLanguage(language: CodeLanguage) {
-  return supportsLocalExecution(language);
+  return canRunLanguage(language);
 }
 
 export async function saveProblemDraft(input: {

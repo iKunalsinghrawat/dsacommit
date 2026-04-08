@@ -22,7 +22,7 @@ import {
   createStarterTemplateForLanguage,
   getLanguageConfig,
   getLanguageOptions,
-  supportsLocalExecution,
+  supportsExecution,
   supportedCodeLanguages,
 } from "@/config/languages";
 import { CodeExecutionStatus, CodeLanguage } from "@/generated/prisma/enums";
@@ -265,7 +265,9 @@ export function ProblemWorkspace({
   const selectedCode = codeByLanguage[language];
   const selectedSubmission = latestSubmissionsState[language] ?? null;
   const selectedLastEditedAt = draftUpdatedAtByLanguage[language] ?? null;
-  const selectedLanguageSupportsExecution = supportsLocalExecution(language);
+  const selectedLanguageSupportsExecution = supportsExecution(language);
+  const selectedLanguageUsesRemoteExecution =
+    selectedLanguageConfig.executionMode === "remote";
   const selectedFileLabel = `solution.${selectedLanguageConfig.fileExtension}`;
 
   const testCasesToRender = useMemo(() => {
@@ -607,7 +609,11 @@ export function ProblemWorkspace({
               <Badge variant="secondary">{selectedLanguageConfig.label}</Badge>
               <Badge variant="outline">{selectedLanguageConfig.versionLabel}</Badge>
               <Badge variant={selectedLanguageSupportsExecution ? "success" : "outline"}>
-                {selectedLanguageSupportsExecution ? "Run and submit ready" : "Draft mode"}
+                {selectedLanguageSupportsExecution
+                  ? selectedLanguageUsesRemoteExecution
+                    ? "Remote runner ready"
+                    : "Run and submit ready"
+                  : "Execution unavailable"}
               </Badge>
             </div>
             <CardDescription>
@@ -643,8 +649,9 @@ export function ProblemWorkspace({
               ))}
             </Select>
           </div>
-          <div className="flex flex-wrap items-end gap-3 lg:justify-end">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-end lg:justify-end">
             <Button
+              className="w-full sm:w-auto"
               disabled={isBusy || !selectedLanguageSupportsExecution}
               onClick={() => execute("run")}
               type="button"
@@ -653,11 +660,16 @@ export function ProblemWorkspace({
               {isRunning ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
               Run code
             </Button>
-            <Button disabled={isBusy || !selectedLanguageSupportsExecution} onClick={() => execute("submit")} type="button">
+            <Button
+              className="w-full sm:w-auto"
+              disabled={isBusy || !selectedLanguageSupportsExecution}
+              onClick={() => execute("submit")}
+              type="button"
+            >
               {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               Submit code
             </Button>
-            <Button disabled={isBusy} onClick={() => void resetCode()} type="button" variant="outline">
+            <Button className="w-full sm:w-auto" disabled={isBusy} onClick={() => void resetCode()} type="button" variant="outline">
               <RotateCcw className="size-4" />
               Reset code
             </Button>
@@ -679,7 +691,9 @@ export function ProblemWorkspace({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             <Badge variant="outline">{selectedFileLabel}</Badge>
             {!selectedLanguageSupportsExecution ? (
-              <span>Drafts save normally. Execution can be plugged in later for this runtime.</span>
+              <span>Drafts save normally. Execution is not available on this deployment right now.</span>
+            ) : selectedLanguageUsesRemoteExecution ? (
+              <span>Run uses visible sample tests in the remote sandbox. Submit also checks hidden tests.</span>
             ) : (
               <span>Run uses sample tests. Submit includes hidden tests.</span>
             )}
@@ -688,7 +702,7 @@ export function ProblemWorkspace({
 
         <CodeEditorSurface
           language={language}
-          minHeight={440}
+          minHeight={360}
           onChange={handleCodeChange}
           value={selectedCode}
         />
@@ -711,7 +725,11 @@ export function ProblemWorkspace({
               ) : (
                 <Badge variant="outline">
                   <Code2 className="size-3.5" />
-                  {selectedLanguageSupportsExecution ? "Ready to run" : "Waiting for runtime"}
+                  {selectedLanguageSupportsExecution
+                    ? selectedLanguageUsesRemoteExecution
+                      ? "Remote runner ready"
+                      : "Ready to run"
+                    : "Execution unavailable"}
                 </Badge>
               )}
             </div>

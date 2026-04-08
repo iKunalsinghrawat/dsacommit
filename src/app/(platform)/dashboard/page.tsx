@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Progress } from "@/components/ui/progress";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Textarea } from "@/components/ui/textarea";
+import { hasPortalAccess } from "@/lib/access-control";
 import { requirePortalAccess, requireUser } from "@/lib/auth";
 import { submitDailyCheckinAction } from "@/lib/actions/platform-actions";
 import { formatPercent, titleCase } from "@/lib/utils";
@@ -22,9 +23,54 @@ export default async function DashboardPage() {
   await requirePortalAccess(UserPortal.DASHBOARD);
   const user = await requireUser();
   const data = await getDashboardData(user.id, user.role);
+  const socialQuickActions = [
+    hasPortalAccess(user, UserPortal.MESSAGES)
+      ? {
+          href: "/messages",
+          title: "Messages",
+          description:
+            user.role === Role.MENTOR
+              ? "Reply to students, continue mentor conversations, and manage incoming call requests."
+              : "Open direct chats, group threads, and active audio/video call conversations.",
+        }
+      : null,
+    hasPortalAccess(user, UserPortal.GROUPS)
+      ? {
+          href: "/groups",
+          title: "Groups",
+          description:
+            "Create study groups, review join requests, and keep group accountability visible.",
+        }
+      : null,
+    hasPortalAccess(user, UserPortal.CONNECTIONS)
+      ? {
+          href: "/connections",
+          title: "Connections",
+          description:
+            "Manage connection requests, blocked users, and student-to-student access before chatting.",
+        }
+      : null,
+  ].filter(Boolean) as Array<{
+    href: string;
+    title: string;
+    description: string;
+  }>;
 
   if (!data) {
-    return null;
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Dashboard data is temporarily unavailable."
+          description="We could not load your live progress right now. Your account shell is still available while the runtime connection is checked."
+        />
+        <Card className="glass-panel-strong">
+          <CardContent className="p-6 text-sm leading-7 text-muted">
+            Try refreshing in a moment. If this keeps happening, verify your runtime environment variables and database migration state.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (user.role === Role.MENTOR && "mentorProfile" in data) {
@@ -35,7 +81,7 @@ export default async function DashboardPage() {
           title="Mentor signal, follower activity, and open student questions."
           description="Use this space to track the students who rely on your guidance and keep your advice sets sharp."
         />
-        <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
           <Card>
             <CardTitle>{data.mentorProfile?.followers.length ?? 0}</CardTitle>
             <CardDescription>Total student followers</CardDescription>
@@ -49,6 +95,20 @@ export default async function DashboardPage() {
             <CardDescription>Open student questions</CardDescription>
           </Card>
         </div>
+        {socialQuickActions.length ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {socialQuickActions.map((item) => (
+              <Link className="block h-full" href={item.href} key={item.href}>
+                <Card className="h-full hover:border-primary/30">
+                  <CardContent className="p-6">
+                    <p className="text-lg font-semibold">{item.title}</p>
+                    <p className="mt-2 text-sm leading-7 text-muted">{item.description}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>Recent mentor questions</CardTitle>
@@ -93,7 +153,7 @@ export default async function DashboardPage() {
             <CardDescription>Published company posts</CardDescription>
           </Card>
           <Card>
-            <CardTitle>{data.topStudents.length}</CardTitle>
+            <CardTitle>{data.topStudents?.length ?? 0}</CardTitle>
             <CardDescription>Students targeting your company</CardDescription>
           </Card>
         </div>
@@ -114,12 +174,26 @@ export default async function DashboardPage() {
             </Button>
           }
         />
-        <div className="grid gap-4 lg:grid-cols-4">
+      <div className="grid gap-4 lg:grid-cols-4">
           <Card><CardTitle>{data.users}</CardTitle><CardDescription>Total users</CardDescription></Card>
           <Card><CardTitle>{data.companies}</CardTitle><CardDescription>Company profiles</CardDescription></Card>
           <Card><CardTitle>{data.mentors}</CardTitle><CardDescription>Mentor profiles</CardDescription></Card>
           <Card><CardTitle>{data.problems}</CardTitle><CardDescription>Problem records</CardDescription></Card>
         </div>
+        {socialQuickActions.length ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            {socialQuickActions.map((item) => (
+              <Link className="block h-full" href={item.href} key={item.href}>
+                <Card className="h-full hover:border-primary/30">
+                  <CardContent className="p-6">
+                    <p className="text-lg font-semibold">{item.title}</p>
+                    <p className="mt-2 text-sm leading-7 text-muted">{item.description}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -228,6 +302,21 @@ export default async function DashboardPage() {
         <Card><CardTitle>{formatPercent(studentData.user.studentProfile?.monthlyCommitmentScore ?? 0)}</CardTitle><CardDescription>Monthly commitment</CardDescription></Card>
         <Card><CardTitle>{Math.round(studentData.user.studentProfile?.commitmentScore ?? 0)}</CardTitle><CardDescription>Overall commitment score</CardDescription></Card>
       </div>
+
+      {socialQuickActions.length ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          {socialQuickActions.map((item) => (
+            <Link className="block h-full" href={item.href} key={item.href}>
+              <Card className="h-full hover:border-primary/30">
+                <CardContent className="p-6">
+                  <p className="text-lg font-semibold">{item.title}</p>
+                  <p className="mt-2 text-sm leading-7 text-muted">{item.description}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>

@@ -3,19 +3,19 @@ import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 import { Role, UserPortal, UserStatus } from "./src/generated/prisma/enums";
+import { requireAuthSecret } from "./src/lib/auth-config";
 import { getHomeForAccess, hasPortalAccess, navigationItems } from "./src/lib/access-control";
-import { AUTH_COOKIE_NAME, PROTECTED_ROUTE_PREFIXES } from "./src/lib/constants";
+import { AUTH_COOKIE_NAME, isPublicProfilePath, PROTECTED_ROUTE_PREFIXES } from "./src/lib/constants";
 
 async function getSessionFromRequest(request: NextRequest) {
   const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  const secret = process.env.AUTH_SECRET;
 
-  if (!token || !secret) {
+  if (!token) {
     return null;
   }
 
   try {
-    const verified = await jwtVerify(token, new TextEncoder().encode(secret));
+    const verified = await jwtVerify(token, requireAuthSecret());
     return verified.payload as {
       userId: string;
       name?: string;
@@ -34,9 +34,13 @@ async function getSessionFromRequest(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const session = await getSessionFromRequest(request);
-  const isProtected = PROTECTED_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+  const isPublicProfile = isPublicProfilePath(pathname);
+  const isProtected =
+    !isPublicProfile && PROTECTED_ROUTE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
   const isAuthPage = pathname.startsWith("/auth/signin") || pathname.startsWith("/auth/signup");
-  const matchedPortalRoute = navigationItems.find((item) => pathname.startsWith(item.href));
+  const matchedPortalRoute = isPublicProfile
+    ? undefined
+    : navigationItems.find((item) => pathname.startsWith(item.href));
 
   if (session?.status && session.status !== UserStatus.ACTIVE) {
     const response = NextResponse.redirect(new URL("/auth/signin", request.url));

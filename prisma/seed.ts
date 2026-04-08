@@ -4,12 +4,29 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { faker } from "@faker-js/faker";
 import { startOfDay, subDays } from "date-fns";
 
-import { PrismaClient } from "../src/generated/prisma/client";
+import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import {
+  CallParticipantStatus,
+  CallSessionStatus,
+  CallType,
   CareerTarget,
+  ChangeRequestEntityType,
+  ChangeRequestOperationType,
+  ChangeRequestStatus,
+  ConnectionRequestStatus,
+  ConversationParticipantRole,
+  ConversationType,
   CommunityPostType,
+  GroupJoinPolicy,
+  GroupJoinRequestStatus,
+  GroupMemberRole,
+  GroupPrivacy,
+  NotificationType,
   ParticipationStatus,
+  ProfileVisibility,
+  RoadmapLevel,
   Role,
+  SignalingEventType,
   StudentLevel,
   SubmissionState,
 } from "../src/generated/prisma/enums";
@@ -20,6 +37,7 @@ import {
   companySeed,
   mentorPostSeed,
   mentorSeed,
+  roadmapItemSeed,
   topicSeed,
 } from "../src/data/platform-content";
 import { problemChallengeSeed } from "../src/data/problem-challenges";
@@ -32,6 +50,7 @@ import {
 } from "../src/lib/scoring";
 import { hashPassword } from "../src/lib/password";
 import { slugify } from "../src/lib/utils";
+import { createDirectConversationKey } from "../src/lib/communication";
 
 faker.seed(20260404);
 
@@ -81,6 +100,10 @@ const headlineCycle = [
   "Using consistency and revision to close weak topics one by one.",
 ];
 
+function toJsonValue(value: unknown) {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 type SeedStudent = {
   id: string;
   name: string;
@@ -98,6 +121,23 @@ type SeedStudent = {
 };
 
 async function clearDatabase() {
+  await prisma.callSignal.deleteMany();
+  await prisma.callParticipant.deleteMany();
+  await prisma.callSession.deleteMany();
+  await prisma.messageReadState.deleteMany();
+  await prisma.directMessage.deleteMany();
+  await prisma.conversationParticipant.deleteMany();
+  await prisma.conversation.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.userBlock.deleteMany();
+  await prisma.userConnection.deleteMany();
+  await prisma.connectionRequest.deleteMany();
+  await prisma.groupJoinRequest.deleteMany();
+  await prisma.groupMember.deleteMany();
+  await prisma.group.deleteMany();
+  await prisma.changeRequestReview.deleteMany();
+  await prisma.changeRequest.deleteMany();
+  await prisma.codeDraft.deleteMany();
   await prisma.postLike.deleteMany();
   await prisma.comment.deleteMany();
   await prisma.communityPost.deleteMany();
@@ -122,6 +162,7 @@ async function clearDatabase() {
   await prisma.companyContent.deleteMany();
   await prisma.studentTargetCompany.deleteMany();
   await prisma.studentWeakTopic.deleteMany();
+  await prisma.roadmapItem.deleteMany();
   await prisma.problem.deleteMany();
   await prisma.topic.deleteMany();
   await prisma.mentorProfile.deleteMany();
@@ -235,6 +276,22 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
       },
     });
     topicMap.set(topic.slug, created.id);
+  }
+
+  const roadmapItemMap = new Map<string, string>();
+  for (const roadmapItem of roadmapItemSeed) {
+    const createdRoadmapItem = await prisma.roadmapItem.create({
+      data: {
+        title: roadmapItem.title,
+        slug: roadmapItem.slug,
+        level: roadmapItem.level,
+        summary: roadmapItem.summary,
+        details: roadmapItem.details,
+        sortOrder: roadmapItem.sortOrder,
+        topicId: topicMap.get(roadmapItem.topicSlug),
+      },
+    });
+    roadmapItemMap.set(roadmapItem.slug, createdRoadmapItem.id);
   }
 
   const companyMap = new Map<string, string>();
@@ -357,10 +414,11 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
     });
   }
 
+  const problemMap = new Map<string, string>();
   for (const problem of problemSeed) {
     const challenge = problemChallengeSeed[problem.slug];
 
-    await prisma.problem.create({
+    const createdProblem = await prisma.problem.create({
       data: {
         title: problem.title,
         slug: problem.slug,
@@ -400,6 +458,7 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
           : undefined,
       },
     });
+    problemMap.set(problem.slug, createdProblem.id);
   }
 
   const today = startOfDay(new Date());
@@ -420,7 +479,16 @@ async function createBaseUsersAndContent(defaultPasswordHash: string) {
     });
   }
 
-  return { adminUser, badgeMap, topicMap, companyMap, companyOwnerMap, mentorMap };
+  return {
+    adminUser,
+    badgeMap,
+    topicMap,
+    roadmapItemMap,
+    companyMap,
+    companyOwnerMap,
+    mentorMap,
+    problemMap,
+  };
 }
 
 async function createStudents(
@@ -441,6 +509,7 @@ async function createStudents(
         name,
         slug,
         role: Role.STUDENT,
+        profileVisibility: index % 7 === 0 ? ProfileVisibility.PRIVATE : ProfileVisibility.PUBLIC,
         accessGrants: getDefaultAccessGrants(Role.STUDENT),
         headline: headlineCycle[index % headlineCycle.length],
         bio: `${name.split(" ")[0]} is targeting ${blueprint.target.toLowerCase()} opportunities with a ${blueprint.level.toLowerCase()}-to-advanced DSA roadmap.`,
@@ -792,6 +861,671 @@ async function createStudentActivity(
   }
 }
 
+async function createApprovalWorkflowFixtures(input: {
+  adminUserId: string;
+  students: SeedStudent[];
+  topicMap: Map<string, string>;
+  roadmapItemMap: Map<string, string>;
+  companyMap: Map<string, string>;
+  problemMap: Map<string, string>;
+}) {
+  const [studentOne, studentTwo, studentThree, studentFour, studentFive] = input.students;
+  const arraysTopicId = input.topicMap.get("arrays")!;
+  const graphRoadmapId = input.roadmapItemMap.get("roadmap-graph")!;
+  const firstProblemId = input.problemMap.get(problemSeed[0].slug)!;
+
+  const arraysTopic = await prisma.topic.findUnique({
+    where: { id: arraysTopicId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      level: true,
+      sortOrder: true,
+      conceptSummary: true,
+      notes: true,
+      difficultyProgression: true,
+      revisionChecklist: true,
+      quiz: true,
+      estimatedHours: true,
+      icon: true,
+      accentColor: true,
+      isArchived: true,
+    },
+  });
+
+  const graphRoadmapItem = await prisma.roadmapItem.findUnique({
+    where: { id: graphRoadmapId },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      level: true,
+      summary: true,
+      details: true,
+      sortOrder: true,
+      topicId: true,
+      isArchived: true,
+    },
+  });
+
+  const firstProblem = await prisma.problem.findUnique({
+    where: { id: firstProblemId },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      difficulty: true,
+      topicId: true,
+      problemStatement: true,
+      examples: true,
+      constraints: true,
+      hints: true,
+      editorial: true,
+      similarProblemSlugs: true,
+      roleFocus: true,
+      frequency: true,
+      estimatedMinutes: true,
+      codeExecutionEnabled: true,
+      starterCode: true,
+      starterLanguage: true,
+      isArchived: true,
+      companyTags: {
+        select: {
+          companyId: true,
+          frequency: true,
+          role: true,
+          notes: true,
+        },
+        orderBy: [{ companyId: "asc" }, { frequency: "asc" }],
+      },
+      testCases: {
+        select: {
+          label: true,
+          input: true,
+          expectedOutput: true,
+          isHidden: true,
+          sortOrder: true,
+        },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+
+  if (!arraysTopic || !graphRoadmapItem || !firstProblem) {
+    throw new Error("Approval workflow fixtures require seeded topic, roadmap, and problem records.");
+  }
+
+  const pendingTopicUpdate = {
+    name: arraysTopic.name,
+    slug: arraysTopic.slug,
+    level: arraysTopic.level,
+    sortOrder: arraysTopic.sortOrder,
+    conceptSummary:
+      "Arrays teach indexing, iteration, and the habit of spotting prefix sums, windows, and in-place transforms before overcomplicating the solution.",
+    notes:
+      "Students should first classify whether the problem is about direct indexing, carrying state forward, or shrinking a window. Prefix sums and in-place mutation both deserve explicit revision notes.",
+    difficultyProgression: arraysTopic.difficultyProgression,
+    revisionChecklist: arraysTopic.revisionChecklist,
+    quiz: arraysTopic.quiz,
+    estimatedHours: arraysTopic.estimatedHours,
+    icon: arraysTopic.icon,
+    accentColor: arraysTopic.accentColor,
+  };
+
+  await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.TOPIC,
+      operationType: ChangeRequestOperationType.UPDATE,
+      status: ChangeRequestStatus.PENDING,
+      entityId: arraysTopic.id,
+      summary: "Update topic: Arrays with a clearer prefix-sum explanation",
+      requestedById: studentOne.id,
+      requestedData: toJsonValue(pendingTopicUpdate),
+      currentData: toJsonValue(arraysTopic),
+    },
+  });
+
+  const pendingRoadmapUpdate = {
+    title: graphRoadmapItem.title,
+    slug: graphRoadmapItem.slug,
+    level: graphRoadmapItem.level,
+    summary:
+      "Shift this checkpoint to emphasize traversal state, connected components, and shortest-path pattern selection before heavier graph optimization.",
+    details:
+      "Add a stronger distinction between representation choice, visited semantics, BFS vs DFS reasoning, and when to jump from traversal into shortest-path or topological workflows.",
+    sortOrder: graphRoadmapItem.sortOrder,
+    topicId: input.topicMap.get("graph"),
+  };
+
+  await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.ROADMAP_ITEM,
+      operationType: ChangeRequestOperationType.UPDATE,
+      status: ChangeRequestStatus.PENDING,
+      entityId: graphRoadmapItem.id,
+      summary: "Update roadmap item: Graph with a stronger traversal checkpoint",
+      requestedById: studentTwo.id,
+      requestedData: toJsonValue(pendingRoadmapUpdate),
+      currentData: toJsonValue(graphRoadmapItem),
+    },
+  });
+
+  const pendingProblemCreate = {
+    title: "Rotation Window Checkpoint",
+    slug: "rotation-window-checkpoint",
+    difficulty: "MEDIUM",
+    topicId: input.topicMap.get("sliding-window")!,
+    problemStatement:
+      "Given a binary array, return the minimum swaps required to group all 1s together in a circular array.",
+    examples: [
+      {
+        input: "nums = [0,1,0,1,1,0,0]",
+        output: "1",
+        explanation:
+          "A circular window of size equal to the count of ones can capture three ones with one misplaced zero.",
+      },
+    ],
+    constraints: ["1 <= nums.length <= 10^5", "nums[i] is either 0 or 1"],
+    hints: [
+      "Count the total number of ones first.",
+      "Use a sliding window of that size over a doubled view of the array.",
+    ],
+    editorial:
+      "Treat the circular array by scanning a window across indices modulo n. The answer is the number of zeros in the best window of size totalOnes.",
+    similarProblemSlugs: [problemSeed[0]?.slug ?? "pair-sum-checkpoint"],
+    roleFocus: "Intern",
+    frequency: 4,
+    estimatedMinutes: 35,
+    codeExecutionEnabled: true,
+    starterCode: "export function solve(input: string): string {\n  return \"\";\n}\n",
+    starterLanguage: "TYPESCRIPT",
+    companyTags: [
+      {
+        companyId: input.companyMap.get("amazon")!,
+        frequency: 4,
+        role: "Intern",
+        notes: "Common sliding-window variation for OA practice.",
+      },
+    ],
+    testCases: [
+      {
+        label: "Sample 1",
+        input: "[0,1,0,1,1,0,0]",
+        expectedOutput: "1",
+        isHidden: false,
+        sortOrder: 1,
+      },
+      {
+        label: "Edge",
+        input: "[1,1,1,1]",
+        expectedOutput: "0",
+        isHidden: true,
+        sortOrder: 2,
+      },
+    ],
+  };
+
+  await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.PROBLEM,
+      operationType: ChangeRequestOperationType.CREATE,
+      status: ChangeRequestStatus.PENDING,
+      summary: "Create problem: Rotation window checkpoint",
+      requestedById: studentThree.id,
+      requestedData: toJsonValue(pendingProblemCreate),
+    },
+  });
+
+  const publishedRoadmapItem = await prisma.roadmapItem.create({
+    data: {
+      title: "Greedy Interview Checkpoint",
+      slug: "roadmap-greedy-interview-checkpoint",
+      level: RoadmapLevel.ADVANCED,
+      summary:
+        "Add a checkpoint focused on proving why the greedy choice is safe before implementation.",
+      details:
+        "Students should practice identifying the decision invariant, proving local optimality, and checking the failure mode that would break a greedy approach.",
+      sortOrder: 10,
+      topicId: input.topicMap.get("greedy"),
+    },
+  });
+
+  const approvedRoadmapRequest = await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.ROADMAP_ITEM,
+      operationType: ChangeRequestOperationType.CREATE,
+      status: ChangeRequestStatus.APPROVED,
+      entityId: publishedRoadmapItem.id,
+      summary: "Create roadmap item: Greedy interview checkpoint",
+      requestedById: studentFour.id,
+      requestedData: toJsonValue({
+        title: publishedRoadmapItem.title,
+        slug: publishedRoadmapItem.slug,
+        level: publishedRoadmapItem.level,
+        summary: publishedRoadmapItem.summary,
+        details: publishedRoadmapItem.details,
+        sortOrder: publishedRoadmapItem.sortOrder,
+        topicId: publishedRoadmapItem.topicId,
+      }),
+      reviewedById: input.adminUserId,
+      reviewedAt: new Date(),
+    },
+  });
+
+  await prisma.changeRequestReview.create({
+    data: {
+      requestId: approvedRoadmapRequest.id,
+      reviewerId: input.adminUserId,
+      status: ChangeRequestStatus.APPROVED,
+    },
+  });
+
+  const rejectedProblemRequest = await prisma.changeRequest.create({
+    data: {
+      entityType: ChangeRequestEntityType.PROBLEM,
+      operationType: ChangeRequestOperationType.DELETE,
+      status: ChangeRequestStatus.REJECTED,
+      entityId: firstProblem.id,
+      summary: `Remove problem: ${firstProblem.title}`,
+      requestedById: studentFive.id,
+      requestedData: toJsonValue({
+        deletionReason:
+          "Requesting review because this problem overlaps too much with another set and needs replacement, not direct removal.",
+      }),
+      currentData: toJsonValue(firstProblem),
+      rejectionReason:
+        "Keep the live problem for now. Replace it with a stronger alternative before requesting removal again.",
+      reviewedById: input.adminUserId,
+      reviewedAt: new Date(),
+    },
+  });
+
+  await prisma.changeRequestReview.create({
+    data: {
+      requestId: rejectedProblemRequest.id,
+      reviewerId: input.adminUserId,
+      status: ChangeRequestStatus.REJECTED,
+      note:
+        "Keep the live problem for now. Replace it with a stronger alternative before requesting removal again.",
+    },
+  });
+}
+
+async function createCommunicationFixtures() {
+  const communicationUsers = await prisma.user.findMany({
+    where: {
+      email: {
+        in: [
+          "student01@dsacommit.dev",
+          "student02@dsacommit.dev",
+          "student03@dsacommit.dev",
+          "student04@dsacommit.dev",
+          "student05@dsacommit.dev",
+          "aarav@dsacommit.dev",
+        ],
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      slug: true,
+      role: true,
+    },
+  });
+
+  const usersByEmail = new Map(
+    communicationUsers.map((user) => [user.email, user]),
+  );
+
+  const studentOne = usersByEmail.get("student01@dsacommit.dev");
+  const studentTwo = usersByEmail.get("student02@dsacommit.dev");
+  const studentThree = usersByEmail.get("student03@dsacommit.dev");
+  const studentFour = usersByEmail.get("student04@dsacommit.dev");
+  const studentFive = usersByEmail.get("student05@dsacommit.dev");
+  const mentor = usersByEmail.get("aarav@dsacommit.dev");
+
+  if (
+    !studentOne ||
+    !studentTwo ||
+    !studentThree ||
+    !studentFour ||
+    !studentFive ||
+    !mentor
+  ) {
+    return;
+  }
+
+  const createMessageWithReadStates = async (input: {
+    conversationId: string;
+    senderId: string;
+    content: string;
+    deliveredTo: string[];
+    readBy: string[];
+    createdAt?: Date;
+  }) => {
+    const messageTimestamp = input.createdAt ?? new Date();
+
+    const message = await prisma.directMessage.create({
+      data: {
+        conversationId: input.conversationId,
+        senderId: input.senderId,
+        content: input.content,
+        createdAt: messageTimestamp,
+      },
+    });
+
+    await prisma.messageReadState.createMany({
+      data: input.deliveredTo.map((userId) => ({
+        messageId: message.id,
+        userId,
+        deliveredAt: messageTimestamp,
+        readAt: input.readBy.includes(userId) ? messageTimestamp : null,
+      })),
+    });
+
+    await prisma.conversation.update({
+      where: { id: input.conversationId },
+      data: {
+        lastMessageAt: messageTimestamp,
+        lastMessagePreview: input.content.slice(0, 120),
+      },
+    });
+
+    return message;
+  };
+
+  const acceptedConnectionPairs = [
+    [studentOne.id, studentTwo.id],
+    [studentTwo.id, studentThree.id],
+  ].map(([firstUserId, secondUserId]) => [firstUserId, secondUserId].sort() as [string, string]);
+
+  await prisma.userConnection.createMany({
+    data: acceptedConnectionPairs.map(([userOneId, userTwoId]) => ({
+      userOneId,
+      userTwoId,
+    })),
+    skipDuplicates: true,
+  });
+
+  await prisma.connectionRequest.createMany({
+    data: [
+      {
+        senderId: studentThree.id,
+        receiverId: studentOne.id,
+        status: ConnectionRequestStatus.PENDING,
+      },
+      {
+        senderId: studentOne.id,
+        receiverId: studentFour.id,
+        status: ConnectionRequestStatus.PENDING,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  await prisma.userBlock.createMany({
+    data: [
+      {
+        blockerId: studentOne.id,
+        blockedId: studentFive.id,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  const studentConversation = await prisma.conversation.upsert({
+    where: {
+      directKey: createDirectConversationKey(studentOne.id, studentTwo.id),
+    },
+    create: {
+      type: ConversationType.DIRECT,
+      directKey: createDirectConversationKey(studentOne.id, studentTwo.id),
+      createdById: studentOne.id,
+      participants: {
+        create: [
+          { userId: studentOne.id },
+          { userId: studentTwo.id },
+        ],
+      },
+    },
+    update: {},
+  });
+
+  const mentorConversation = await prisma.conversation.upsert({
+    where: {
+      directKey: createDirectConversationKey(studentOne.id, mentor.id),
+    },
+    create: {
+      type: ConversationType.DIRECT,
+      directKey: createDirectConversationKey(studentOne.id, mentor.id),
+      createdById: studentOne.id,
+      participants: {
+        create: [
+          { userId: studentOne.id },
+          { userId: mentor.id },
+        ],
+      },
+    },
+    update: {},
+  });
+
+  await createMessageWithReadStates({
+    conversationId: studentConversation.id,
+    senderId: studentOne.id,
+    content:
+      "Let's solve two graph mediums this week and review each other's approach before moving to harder variants.",
+    deliveredTo: [studentOne.id, studentTwo.id],
+    readBy: [studentOne.id, studentTwo.id],
+    createdAt: subDays(new Date(), 1),
+  });
+
+  await createMessageWithReadStates({
+    conversationId: studentConversation.id,
+    senderId: studentTwo.id,
+    content:
+      "I'm in. Start with traversal state and shortest-path pattern recognition, then we'll compare notes on Friday.",
+    deliveredTo: [studentOne.id, studentTwo.id],
+    readBy: [studentTwo.id],
+  });
+
+  await createMessageWithReadStates({
+    conversationId: mentorConversation.id,
+    senderId: studentOne.id,
+    content:
+      "I'm getting stuck turning brute force graph ideas into the right BFS or DFS framing. Can you suggest a sharper checkpoint?",
+    deliveredTo: [studentOne.id, mentor.id],
+    readBy: [studentOne.id, mentor.id],
+  });
+
+  await createMessageWithReadStates({
+    conversationId: mentorConversation.id,
+    senderId: mentor.id,
+    content:
+      "Before coding, say the state transition out loud: what makes a node visited, what work happens on entry, and what stops revisits from corrupting the answer.",
+    deliveredTo: [studentOne.id, mentor.id],
+    readBy: [mentor.id],
+  });
+
+  const arraysGroup = await prisma.group.create({
+    data: {
+      slug: "arrays-accountability-circle",
+      name: "Arrays Accountability Circle",
+      description:
+        "A compact daily practice room for arrays, windows, and prefix sums with short accountability check-ins.",
+      category: "Arrays",
+      privacy: GroupPrivacy.PUBLIC,
+      joinPolicy: GroupJoinPolicy.OPEN,
+      createdById: studentOne.id,
+    },
+  });
+
+  await prisma.groupMember.createMany({
+    data: [
+      {
+        groupId: arraysGroup.id,
+        userId: studentOne.id,
+        role: GroupMemberRole.OWNER,
+        addedById: studentOne.id,
+      },
+      {
+        groupId: arraysGroup.id,
+        userId: studentTwo.id,
+        role: GroupMemberRole.ADMIN,
+        addedById: studentOne.id,
+      },
+      {
+        groupId: arraysGroup.id,
+        userId: studentThree.id,
+        role: GroupMemberRole.MEMBER,
+        addedById: studentTwo.id,
+      },
+    ],
+  });
+
+  const arraysGroupConversation = await prisma.conversation.create({
+    data: {
+      type: ConversationType.GROUP,
+      groupId: arraysGroup.id,
+      createdById: studentOne.id,
+      participants: {
+        create: [
+          {
+            userId: studentOne.id,
+            role: ConversationParticipantRole.ADMIN,
+          },
+          {
+            userId: studentTwo.id,
+            role: ConversationParticipantRole.ADMIN,
+          },
+          {
+            userId: studentThree.id,
+          },
+        ],
+      },
+    },
+  });
+
+  await createMessageWithReadStates({
+    conversationId: arraysGroupConversation.id,
+    senderId: studentOne.id,
+    content:
+      "Today's goal: one sliding-window easy, one prefix-sum medium, then post the exact invariant you used.",
+    deliveredTo: [studentOne.id, studentTwo.id, studentThree.id],
+    readBy: [studentOne.id, studentTwo.id],
+  });
+
+  const privateGroup = await prisma.group.create({
+    data: {
+      slug: "google-bfs-pod",
+      name: "Google BFS Pod",
+      description:
+        "Private prep pod for students focusing on BFS, grids, and interview-quality explanation habits.",
+      category: "Google prep",
+      privacy: GroupPrivacy.PRIVATE,
+      joinPolicy: GroupJoinPolicy.APPROVAL,
+      createdById: studentTwo.id,
+    },
+  });
+
+  await prisma.groupMember.create({
+    data: {
+      groupId: privateGroup.id,
+      userId: studentTwo.id,
+      role: GroupMemberRole.OWNER,
+      addedById: studentTwo.id,
+    },
+  });
+
+  await prisma.conversation.create({
+    data: {
+      type: ConversationType.GROUP,
+      groupId: privateGroup.id,
+      createdById: studentTwo.id,
+      participants: {
+        create: {
+          userId: studentTwo.id,
+          role: ConversationParticipantRole.ADMIN,
+        },
+      },
+    },
+  });
+
+  await prisma.groupJoinRequest.create({
+    data: {
+      groupId: privateGroup.id,
+      requesterId: studentFour.id,
+      status: GroupJoinRequestStatus.PENDING,
+      message:
+        "I'm working through BFS grids this week and can show up daily for short review updates.",
+    },
+  });
+
+  const ringingCall = await prisma.callSession.create({
+    data: {
+      conversationId: studentConversation.id,
+      initiatedById: studentOne.id,
+      callType: CallType.VIDEO,
+      status: CallSessionStatus.RINGING,
+      participants: {
+        create: [
+          {
+            userId: studentOne.id,
+            status: CallParticipantStatus.JOINED,
+            joinedAt: new Date(),
+          },
+          {
+            userId: studentTwo.id,
+            status: CallParticipantStatus.INVITED,
+          },
+        ],
+      },
+    },
+  });
+
+  await prisma.callSignal.create({
+    data: {
+      callSessionId: ringingCall.id,
+      senderId: studentOne.id,
+      type: SignalingEventType.READY,
+      payload: {
+        callType: "video",
+        note: "Offer channel ready",
+      },
+    },
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: studentOne.id,
+        actorId: studentThree.id,
+        type: NotificationType.CONNECTION_REQUEST,
+        title: "New connection request",
+        body: `${studentThree.name} wants to connect for practice accountability.`,
+        actionUrl: "/connections",
+      },
+      {
+        userId: studentTwo.id,
+        actorId: studentFour.id,
+        type: NotificationType.GROUP_JOIN_REQUEST,
+        title: "New group join request",
+        body: `${studentFour.name} requested access to ${privateGroup.name}.`,
+        actionUrl: `/groups/${privateGroup.slug}`,
+      },
+      {
+        userId: studentTwo.id,
+        actorId: studentOne.id,
+        type: NotificationType.INCOMING_CALL,
+        title: "Incoming video call",
+        body: "Open the conversation to accept or decline the call.",
+        actionUrl: `/messages/${studentConversation.id}`,
+      },
+    ],
+  });
+}
+
 async function main() {
   await clearDatabase();
 
@@ -799,10 +1533,19 @@ async function main() {
     process.env.SEED_DEFAULT_PASSWORD?.trim() || defaultCredentials.memberPassword;
   const memberPasswordHash = await hashPassword(memberPassword);
 
-  const { badgeMap, topicMap, companyMap, mentorMap } =
+  const { adminUser, badgeMap, topicMap, roadmapItemMap, companyMap, mentorMap, problemMap } =
     await createBaseUsersAndContent(memberPasswordHash);
   const students = await createStudents(memberPasswordHash, companyMap, topicMap);
   await createStudentActivity(students, badgeMap, topicMap, mentorMap, companyMap);
+  await createApprovalWorkflowFixtures({
+    adminUserId: adminUser.id,
+    students,
+    topicMap,
+    roadmapItemMap,
+    companyMap,
+    problemMap,
+  });
+  await createCommunicationFixtures();
 
   console.log("Seed completed.");
   console.log(`Admin: ${defaultCredentials.admin.email} / ${defaultCredentials.admin.password}`);

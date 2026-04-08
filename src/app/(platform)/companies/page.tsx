@@ -23,7 +23,7 @@ export default async function CompaniesPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {companies.map((company) => (
-          <Link href={`/companies/${company.slug}`} key={company.id}>
+          <Link className="block h-full" href={`/companies/${company.slug}`} key={company.id}>
             <Card className="h-full hover:border-primary/30">
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">

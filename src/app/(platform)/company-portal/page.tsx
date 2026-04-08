@@ -1,5 +1,4 @@
 import { Role, UserPortal } from "@/generated/prisma/enums";
-import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +21,20 @@ export default async function CompanyPortalPage() {
   const data = await getCompanyPortalData(user.id);
 
   if (!data) {
-    notFound();
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Company portal"
+          title="Company portal data is temporarily unavailable."
+          description="We could not load the company profile or talent list right now."
+        />
+        <Card className="glass-panel-strong">
+          <CardContent className="p-6 text-sm leading-7 text-muted">
+            Refresh after checking database access and runtime configuration. The company portal will load again as soon as that connection is healthy.
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
