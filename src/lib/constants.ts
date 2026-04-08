@@ -20,6 +20,10 @@ export const PROTECTED_ROUTE_PREFIXES = [
 
 export const PUBLIC_ROUTES = ["/", "/auth/signin", "/auth/signup", "/api/health"];
 
+export function isPublicProfilePath(pathname: string) {
+  return /^\/profile\/[^/]+\/?$/.test(pathname);
+}
+
 export const roleHomeMap: Record<Role, string> = {
   [Role.STUDENT]: "/dashboard",
   [Role.MENTOR]: "/dashboard",

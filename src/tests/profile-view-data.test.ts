@@ -60,6 +60,18 @@ describe("getProfileViewData", () => {
     expect(result?.isAdmin).toBe(false);
   });
 
+  it("lets guests view a public profile", async () => {
+    prisma.user.findUnique.mockResolvedValue(createProfile(ProfileVisibility.PUBLIC));
+
+    const result = await getProfileViewData({
+      slug: "riya-sharma",
+    });
+
+    expect(result?.canViewFullProfile).toBe(true);
+    expect(result?.isOwner).toBe(false);
+    expect(result?.isAdmin).toBe(false);
+  });
+
   it("hides a private profile from non-owners", async () => {
     prisma.user.findUnique.mockResolvedValue(createProfile(ProfileVisibility.PRIVATE));
 
@@ -67,6 +79,16 @@ describe("getProfileViewData", () => {
       slug: "riya-sharma",
       viewerId: "viewer-1",
       viewerRole: Role.STUDENT,
+    });
+
+    expect(result?.canViewFullProfile).toBe(false);
+  });
+
+  it("hides a private profile from guests", async () => {
+    prisma.user.findUnique.mockResolvedValue(createProfile(ProfileVisibility.PRIVATE));
+
+    const result = await getProfileViewData({
+      slug: "riya-sharma",
     });
 
     expect(result?.canViewFullProfile).toBe(false);
