@@ -29,6 +29,7 @@ import {
 import type {
   CommunicationRealtimeCall,
   CommunicationRealtimeNotification,
+  CommunicationRealtimeSignal,
   CommunicationRealtimeUser,
 } from "@/lib/communication-realtime";
 import { prisma } from "@/lib/prisma";
@@ -193,6 +194,35 @@ function serializeCallForRealtime(call: {
       status: participant.status,
       user: serializeRealtimeUser(participant.user),
     })),
+  };
+}
+
+function serializeCallSignalForRealtime(signal: {
+  id: string;
+  callSessionId: string;
+  senderId: string;
+  type: SignalingEventType;
+  payload: unknown;
+  createdAt: Date | string;
+  sender: Partial<{
+    id: string;
+    name: string;
+    slug: string | null;
+    role: Role;
+    headline: string | null;
+    avatarUrl: string | null;
+    isVerified: boolean;
+    lastActiveAt: Date | string | null;
+  }>;
+}): CommunicationRealtimeSignal {
+  return {
+    id: signal.id,
+    callSessionId: signal.callSessionId,
+    senderId: signal.senderId,
+    type: signal.type,
+    payload: signal.payload,
+    createdAt: toIsoString(signal.createdAt),
+    sender: serializeRealtimeUser(signal.sender),
   };
 }
 
@@ -2491,9 +2521,11 @@ export async function createCallSignal(input: {
     await publishCommunicationRealtimeEvent(tx, {
       type: "call:signal",
       recipients: recipients.map((item) => item.userId),
+      conversationId: participant.callSession.conversationId,
       callSessionId: input.callSessionId,
       payload: {
         reason: input.type,
+        signal: serializeCallSignalForRealtime(signal),
       },
     });
 

@@ -41,6 +41,7 @@ export function AppShell({
 }) {
   return (
     <CommunicationRealtimeProvider
+      currentUserId={user.id}
       initialIncomingCall={initialIncomingCall}
       initialUnreadNotificationCount={initialUnreadNotificationCount}
       isEnabled={user.accessGrants.includes(UserPortal.MESSAGES)}

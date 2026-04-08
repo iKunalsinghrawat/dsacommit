@@ -1,16 +1,11 @@
 "use client";
 
-import { Check, Loader2, LogOut, MessageSquareText, Phone, ShieldBan, ShieldCheck, Trash2, UserMinus, UserPlus, Video, X } from "lucide-react";
+import { Check, Loader2, LogOut, MessageSquareText, ShieldBan, ShieldCheck, Trash2, UserMinus, UserPlus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import {
-  CallParticipantStatus,
-  CallSessionStatus,
-  CallType,
-} from "@/generated/prisma/enums";
 import type { CommunicationActionState } from "@/lib/actions/communication-actions";
 import {
   blockUserAction,
@@ -23,13 +18,14 @@ import {
   reviewGroupJoinRequestAction,
   sendConnectionRequestAction,
   sendMessageAction,
-  startCallAction,
   startDirectConversationAction,
   unblockUserAction,
-  updateCallParticipantAction,
 } from "@/lib/actions/communication-actions";
+import {
+  LiveCallControls,
+  type CallSummary,
+} from "@/components/communication/live-call-controls";
 
-import { Badge } from "@/components/ui/badge";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -452,23 +448,6 @@ export function MessageComposer({
   );
 }
 
-type CallSummary = {
-  id: string;
-  callType: CallType;
-  status: CallSessionStatus;
-  initiatedById: string;
-  startedAt?: Date | string | null;
-  createdAt?: Date | string;
-  participants: Array<{
-    userId: string;
-    status: CallParticipantStatus;
-    user: {
-      id: string;
-      name: string;
-    };
-  }>;
-};
-
 export function CallControls({
   conversationId,
   currentUserId,
@@ -480,163 +459,12 @@ export function CallControls({
   activeCall: CallSummary | null;
   disabledReason?: string | null;
 }) {
-  const currentParticipant = activeCall?.participants.find(
-    (participant) => participant.userId === currentUserId,
-  );
-  const isInitiator = activeCall?.initiatedById === currentUserId;
-
-  if (disabledReason) {
-    return (
-      <div className="rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm text-muted">
-        {disabledReason}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-3 rounded-[24px] border border-border bg-background/50 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">Call controls</p>
-          <p className="text-xs leading-6 text-muted">
-            Audio/video session status is tracked here. Signaling is ready for a WebRTC layer.
-          </p>
-        </div>
-        {activeCall ? (
-          <Badge variant={activeCall.status === CallSessionStatus.ACTIVE ? "success" : "secondary"}>
-            {activeCall.callType === CallType.VIDEO ? "Video" : "Audio"} {activeCall.status.toLowerCase()}
-          </Badge>
-        ) : null}
-      </div>
-
-      {activeCall ? (
-        <div className="flex flex-wrap gap-2">
-          {activeCall.status === CallSessionStatus.RINGING &&
-          currentParticipant?.status === CallParticipantStatus.INVITED ? (
-            <>
-              <MutationButton
-                action={updateCallParticipantAction}
-                buildFormData={() => {
-                  const formData = new FormData();
-                  formData.set("callSessionId", activeCall.id);
-                  formData.set("action", "ACCEPT");
-                  return formData;
-                }}
-                pendingLabel="Accepting..."
-              >
-                <Check className="size-4" />
-                Accept
-              </MutationButton>
-              <MutationButton
-                action={updateCallParticipantAction}
-                buildFormData={() => {
-                  const formData = new FormData();
-                  formData.set("callSessionId", activeCall.id);
-                  formData.set("action", "DECLINE");
-                  return formData;
-                }}
-                pendingLabel="Declining..."
-                variant="outline"
-              >
-                <X className="size-4" />
-                Decline
-              </MutationButton>
-            </>
-          ) : null}
-
-          {activeCall.status === CallSessionStatus.RINGING && isInitiator ? (
-            <MutationButton
-              action={updateCallParticipantAction}
-              buildFormData={() => {
-                const formData = new FormData();
-                formData.set("callSessionId", activeCall.id);
-                formData.set("action", "END");
-                return formData;
-              }}
-              pendingLabel="Cancelling..."
-              variant="outline"
-            >
-              Cancel call
-            </MutationButton>
-          ) : null}
-
-          {activeCall.status === CallSessionStatus.ACTIVE ? (
-            <>
-              {currentParticipant?.status !== CallParticipantStatus.JOINED ? (
-                <MutationButton
-                  action={updateCallParticipantAction}
-                  buildFormData={() => {
-                    const formData = new FormData();
-                    formData.set("callSessionId", activeCall.id);
-                    formData.set("action", "JOIN");
-                    return formData;
-                  }}
-                  pendingLabel="Joining..."
-                >
-                  Join call
-                </MutationButton>
-              ) : (
-                <MutationButton
-                  action={updateCallParticipantAction}
-                  buildFormData={() => {
-                    const formData = new FormData();
-                    formData.set("callSessionId", activeCall.id);
-                    formData.set("action", "LEAVE");
-                    return formData;
-                  }}
-                  pendingLabel="Leaving..."
-                  variant="outline"
-                >
-                  Leave call
-                </MutationButton>
-              )}
-              <MutationButton
-                action={updateCallParticipantAction}
-                buildFormData={() => {
-                  const formData = new FormData();
-                  formData.set("callSessionId", activeCall.id);
-                  formData.set("action", "END");
-                  return formData;
-                }}
-                pendingLabel="Ending..."
-                variant="outline"
-              >
-                End for everyone
-              </MutationButton>
-            </>
-          ) : null}
-        </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <MutationButton
-            action={startCallAction}
-            buildFormData={() => {
-              const formData = new FormData();
-              formData.set("conversationId", conversationId);
-              formData.set("callType", CallType.AUDIO);
-              return formData;
-            }}
-            pendingLabel="Starting..."
-          >
-            <Phone className="size-4" />
-            Voice call
-          </MutationButton>
-          <MutationButton
-            action={startCallAction}
-            buildFormData={() => {
-              const formData = new FormData();
-              formData.set("conversationId", conversationId);
-              formData.set("callType", CallType.VIDEO);
-              return formData;
-            }}
-            pendingLabel="Starting..."
-            variant="secondary"
-          >
-            <Video className="size-4" />
-            Video call
-          </MutationButton>
-        </div>
-      )}
-    </div>
+    <LiveCallControls
+      activeCall={activeCall}
+      conversationId={conversationId}
+      currentUserId={currentUserId}
+      disabledReason={disabledReason}
+    />
   );
 }

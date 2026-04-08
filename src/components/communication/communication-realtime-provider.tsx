@@ -18,8 +18,19 @@ import type {
   CommunicationRealtimeCall,
   CommunicationRealtimeEvent,
 } from "@/lib/communication-realtime";
+import {
+  ensureCommunicationNotificationPermission,
+  registerCommunicationServiceWorker,
+  showCommunicationNotification,
+  supportsBrowserNotifications,
+} from "@/lib/browser-notifications";
 import { isCommunicationRealtimeEvent } from "@/lib/communication-realtime";
 import { updateCallParticipantAction } from "@/lib/actions/communication-actions";
+import {
+  describeCallMediaError,
+  requestCallMediaStream,
+  stopMediaStream,
+} from "@/components/communication/call-browser";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -185,11 +196,13 @@ function IncomingCallPanel({
 
 export function CommunicationRealtimeProvider({
   children,
+  currentUserId,
   initialIncomingCall,
   initialUnreadNotificationCount,
   isEnabled,
 }: {
   children: ReactNode;
+  currentUserId: string;
   initialIncomingCall: CommunicationRealtimeCall | null;
   initialUnreadNotificationCount: number;
   isEnabled: boolean;
@@ -208,6 +221,8 @@ export function CommunicationRealtimeProvider({
     initialUnreadNotificationCount,
   );
   const [isCallActionPending, startCallActionTransition] = useTransition();
+  const notificationPermissionRequestedRef = useRef(false);
+  const incomingCallTimeoutRef = useRef<number | null>(null);
   const {
     isUnlocked: isRingtoneUnlocked,
     start: startRingtone,
@@ -225,6 +240,22 @@ export function CommunicationRealtimeProvider({
     };
   }, []);
 
+  const maybeRequestNotificationPermission = useCallback(() => {
+    if (
+      notificationPermissionRequestedRef.current ||
+      !supportsBrowserNotifications() ||
+      Notification.permission !== "default" ||
+      (!pathname.startsWith("/messages") &&
+        !pathname.startsWith("/groups") &&
+        !pathname.startsWith("/connections"))
+    ) {
+      return;
+    }
+
+    notificationPermissionRequestedRef.current = true;
+    void ensureCommunicationNotificationPermission();
+  }, [pathname]);
+
   const scheduleRefresh = useCallback(() => {
     if (refreshTimeoutRef.current) {
       window.clearTimeout(refreshTimeoutRef.current);
@@ -240,6 +271,35 @@ export function CommunicationRealtimeProvider({
     listenersRef.current.forEach((listener) => listener(event));
   }, []);
 
+  const showSystemNotification = useCallback(
+    async (input: {
+      title: string;
+      body: string;
+      url?: string | null;
+      tag: string;
+      requireInteraction?: boolean;
+    }) => {
+      if (
+        typeof document === "undefined" ||
+        !supportsBrowserNotifications() ||
+        (document.visibilityState === "visible" && document.hasFocus())
+      ) {
+        return;
+      }
+
+      if (Notification.permission === "default") {
+        await ensureCommunicationNotificationPermission();
+      }
+
+      if (Notification.permission !== "granted") {
+        return;
+      }
+
+      await showCommunicationNotification(input);
+    },
+    [],
+  );
+
   const handleRealtimeEvent = useCallback((event: CommunicationRealtimeEvent) => {
     if (seenEventIdsRef.current.has(event.id)) {
       return;
@@ -253,6 +313,13 @@ export function CommunicationRealtimeProvider({
         const notification = event.payload?.notification;
         if (notification && !notification.isRead) {
           setUnreadNotificationCount((current) => current + 1);
+          void showSystemNotification({
+            title: notification.title,
+            body: notification.body,
+            url: notification.actionUrl,
+            tag: `notification-${notification.id}`,
+            requireInteraction: notification.type === "INCOMING_CALL",
+          });
         }
         break;
       }
@@ -299,7 +366,8 @@ export function CommunicationRealtimeProvider({
         if (
           message &&
           pathname !== `/messages/${message.conversationId}` &&
-          message.senderId
+          message.senderId &&
+          message.senderId !== currentUserId
         ) {
           toast.message(`${message.sender.name}: ${message.content.slice(0, 72)}`);
         }
@@ -317,22 +385,68 @@ export function CommunicationRealtimeProvider({
         event.type === "message:new" ||
         event.type === "conversation:update" ||
         event.type === "notification:new" ||
-        event.type === "notification:read" ||
-        event.type.startsWith("call:")
+        event.type === "notification:read"
       ) {
         scheduleRefresh();
       }
     }
-  }, [emitEvent, pathname, scheduleRefresh, startRingtone, stopRingtone]);
+  }, [currentUserId, emitEvent, pathname, scheduleRefresh, showSystemNotification, startRingtone, stopRingtone]);
 
   useEffect(() => {
     if (!incomingCall) {
       stopRingtone();
+      if (incomingCallTimeoutRef.current) {
+        window.clearTimeout(incomingCallTimeoutRef.current);
+        incomingCallTimeoutRef.current = null;
+      }
       return;
     }
 
     startRingtone();
-  }, [incomingCall, startRingtone, stopRingtone]);
+    incomingCallTimeoutRef.current = window.setTimeout(() => {
+      const activeIncomingCall = incomingCallRef.current;
+
+      if (!activeIncomingCall) {
+        return;
+      }
+
+      startCallActionTransition(async () => {
+        const formData = new FormData();
+        formData.set("callSessionId", activeIncomingCall.id);
+        formData.set("action", "MISS");
+        await updateCallParticipantAction(formData);
+        stopRingtone();
+        setIncomingCall(null);
+      });
+    }, 30000);
+
+    return () => {
+      if (incomingCallTimeoutRef.current) {
+        window.clearTimeout(incomingCallTimeoutRef.current);
+        incomingCallTimeoutRef.current = null;
+      }
+    };
+  }, [incomingCall, startCallActionTransition, startRingtone, stopRingtone]);
+
+  useEffect(() => {
+    if (!isEnabled) {
+      return;
+    }
+
+    void registerCommunicationServiceWorker();
+
+    const handleWarmPermissions = () => {
+      maybeRequestNotificationPermission();
+    };
+
+    window.addEventListener("pointerdown", handleWarmPermissions, { passive: true });
+    window.addEventListener("keydown", handleWarmPermissions, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", handleWarmPermissions);
+      window.removeEventListener("keydown", handleWarmPermissions);
+    };
+  }, [isEnabled, maybeRequestNotificationPermission]);
 
   useEffect(() => {
     if (!isEnabled) {
@@ -384,6 +498,17 @@ export function CommunicationRealtimeProvider({
     }
 
     startCallActionTransition(async () => {
+      if (action === "ACCEPT") {
+        try {
+          const previewStream = await requestCallMediaStream(activeIncomingCall.callType);
+          stopMediaStream(previewStream);
+        } catch (error) {
+          const message = describeCallMediaError(error, activeIncomingCall.callType);
+          toast.error(message);
+          return;
+        }
+      }
+
       const formData = new FormData();
       formData.set("callSessionId", activeIncomingCall.id);
       formData.set("action", action);

@@ -243,7 +243,12 @@ Realtime delivery:
 - `/api/realtime/communication` streams live communication events over Server-Sent Events
 - direct messages, notification badges, inbox refresh, and incoming call popups now update without a manual page refresh
 - call ringing uses a browser-safe ringtone flow that starts after the first user interaction unlocks audio
+- audio calls now request microphone permission with `getUserMedia({ audio: true })`
+- video calls now request camera + microphone permission with `getUserMedia({ video: true, audio: true })`
+- live calls now exchange `READY`, `OFFER`, `ANSWER`, `ICE_CANDIDATE`, and `HANGUP` events over the existing signaling API
+- browser notifications are now routed through `public/communication-sw.js` so incoming calls and messages can alert users when the tab is in the background
 - for production, set `REALTIME_DATABASE_URL` to a direct Postgres connection string when your main `DATABASE_URL` is pooled
+- for production WebRTC, set `NEXT_PUBLIC_WEBRTC_STUN_URLS` and optionally TURN credentials if your users are often behind strict NATs
 
 The seed now also creates:
 
@@ -289,6 +294,10 @@ Important: Vercel documents that the Hobby plan is for non-commercial personal u
 
 - `DATABASE_URL`
 - `REALTIME_DATABASE_URL` (recommended direct Postgres URL for SSE listeners)
+- `NEXT_PUBLIC_WEBRTC_STUN_URLS` (comma-separated STUN URLs, optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_URL` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_USERNAME` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL` (optional)
 - `AUTH_SECRET`
 - `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
 - `AUTH_URL` (optional canonical runtime URL)
@@ -327,6 +336,10 @@ Use this when you want a no-cost public deployment without the Vercel Hobby non-
 
 - `DATABASE_URL`
 - `REALTIME_DATABASE_URL` (recommended direct Postgres URL for SSE listeners)
+- `NEXT_PUBLIC_WEBRTC_STUN_URLS` (comma-separated STUN URLs, optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_URL` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_USERNAME` (optional)
+- `NEXT_PUBLIC_WEBRTC_TURN_CREDENTIAL` (optional)
 - `AUTH_SECRET`
 - `NEXTAUTH_SECRET` (optional legacy alias if you already use that naming)
 - `AUTH_URL` (optional canonical runtime URL)
@@ -389,6 +402,8 @@ prisma/
 - Mentor mock interview slot booking is represented as a workflow placeholder rather than a calendar integration.
 - Company portal is single-owner in this MVP rather than multi-member.
 - Search is filter-driven and server-rendered, not full-text indexed yet.
+- Browser notifications currently cover open/background web sessions through the Notification API + service worker. Fully closed-tab mobile push delivery still needs a later Push API subscription + server push layer.
+- The WebRTC call flow now works with STUN by default, but truly reliable cross-network production calling still benefits from a TURN server.
 
 ## Next-phase improvements
 

@@ -4,6 +4,7 @@ import {
   CallType,
   NotificationType,
   Role,
+  SignalingEventType,
 } from "@/generated/prisma/enums";
 
 export const COMMUNICATION_REALTIME_CHANNEL = "communication_events";
@@ -72,6 +73,16 @@ export type CommunicationRealtimeMessage = {
   sender: CommunicationRealtimeUser;
 };
 
+export type CommunicationRealtimeSignal = {
+  id: string;
+  callSessionId: string;
+  senderId: string;
+  type: SignalingEventType;
+  payload: unknown;
+  createdAt: string;
+  sender: CommunicationRealtimeUser;
+};
+
 export type CommunicationRealtimeEvent = {
   id: string;
   type: CommunicationRealtimeEventType;
@@ -83,6 +94,7 @@ export type CommunicationRealtimeEvent = {
     message?: CommunicationRealtimeMessage;
     notification?: CommunicationRealtimeNotification;
     call?: CommunicationRealtimeCall;
+    signal?: CommunicationRealtimeSignal;
     unreadNotificationCount?: number;
     notificationId?: string;
     reason?: string;
