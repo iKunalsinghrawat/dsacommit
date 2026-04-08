@@ -86,8 +86,8 @@ export default async function ProfilePage() {
               <div className="space-y-3">
                 <p className="text-sm font-medium">Bookmarked questions</p>
                 {profile.bookmarks.map((bookmark) => (
-                  <Link href={`/problems/${bookmark.problemId}`} key={bookmark.id}>
-                    <div className="rounded-2xl border border-border bg-background/50 p-4">
+                  <Link className="block h-full" href={`/problems/${bookmark.problemId}`} key={bookmark.id}>
+                    <div className="h-full rounded-2xl border border-border bg-background/50 p-4">
                       <p className="font-medium">{bookmark.problem.title}</p>
                       <p className="text-sm text-muted">{bookmark.problem.topic.name}</p>
                     </div>

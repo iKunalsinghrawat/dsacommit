@@ -24,7 +24,7 @@ export default async function MentorsPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {mentors.map((mentor) => (
-          <Link href={`/mentors/${mentor.user.slug}`} key={mentor.userId}>
+          <Link className="block h-full" href={`/mentors/${mentor.user.slug}`} key={mentor.userId}>
             <Card className="h-full hover:border-primary/30">
               <CardHeader>
                 <div className="flex items-start gap-4">

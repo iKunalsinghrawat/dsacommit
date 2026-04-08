@@ -117,8 +117,8 @@ export default async function CompanyDetailPage({
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {company.problemTags.map((tag) => (
-            <Link href={`/problems/${tag.problem.id}`} key={tag.id}>
-              <div className="rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
+            <Link className="block h-full" href={`/problems/${tag.problem.id}`} key={tag.id}>
+              <div className="h-full rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="font-medium">{tag.problem.title}</p>
                   <Badge variant="outline">{titleCase(tag.problem.difficulty)}</Badge>

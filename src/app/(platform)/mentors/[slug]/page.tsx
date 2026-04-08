@@ -122,8 +122,8 @@ export default async function MentorDetailPage({
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {data.recommendedProblems.map((problem) => (
-            <Link href={`/problems/${problem.id}`} key={problem.id}>
-              <div className="rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
+            <Link className="block h-full" href={`/problems/${problem.id}`} key={problem.id}>
+              <div className="h-full rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
                 <p className="font-medium">{problem.title}</p>
                 <p className="mt-2 text-sm text-muted">{problem.topic.name}</p>
               </div>

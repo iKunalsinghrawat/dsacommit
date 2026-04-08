@@ -108,8 +108,8 @@ export default async function ProblemsPage({
           const attempted = state?.attempted.has(problem.id) ?? false;
 
           return (
-            <Link href={`/problems/${problem.id}`} key={problem.id}>
-              <Card className="hover:border-primary/30">
+            <Link className="block h-full" href={`/problems/${problem.id}`} key={problem.id}>
+              <Card className="h-full hover:border-primary/30">
                 <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-3">

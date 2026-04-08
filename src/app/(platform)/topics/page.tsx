@@ -36,7 +36,7 @@ export default async function TopicsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {topics.map((topic) => (
-          <Link href={`/topics/${topic.slug}`} key={topic.id}>
+          <Link className="block h-full" href={`/topics/${topic.slug}`} key={topic.id}>
             <Card className="h-full hover:border-primary/30">
               <CardHeader>
                 <CardTitle>{topic.name}</CardTitle>

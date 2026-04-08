@@ -127,8 +127,8 @@ export default async function TopicDetailPage({
           </CardHeader>
           <CardContent className="space-y-4">
             {topic.problems.map((problem) => (
-              <Link href={`/problems/${problem.id}`} key={problem.id}>
-                <div className="rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
+              <Link className="block h-full" href={`/problems/${problem.id}`} key={problem.id}>
+                <div className="h-full rounded-2xl border border-border bg-background/50 p-4 hover:border-primary/30">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <p className="font-medium">{problem.title}</p>
                     <Badge variant="outline">{problem.difficulty}</Badge>
