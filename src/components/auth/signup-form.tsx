@@ -18,13 +18,14 @@ const roles = [
 
 const initialState: ActionState = {};
 
-export function SignUpForm() {
+export function SignUpForm({ nextPath }: { nextPath?: string }) {
   const [role, setRole] = useState<Role>(Role.STUDENT);
   const [state, formAction] = useActionState(signUpAction, initialState);
 
   return (
     <form action={formAction} className="space-y-5">
       <input name="role" type="hidden" value={role} />
+      {nextPath ? <input name="next" type="hidden" value={nextPath} /> : null}
 
       <div className="grid gap-3 sm:grid-cols-3">
         {roles.map((item) => (

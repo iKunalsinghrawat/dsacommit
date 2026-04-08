@@ -13,6 +13,7 @@ import {
   logServerError,
 } from "@/lib/runtime-guards";
 import { createSession, clearSession } from "@/lib/session";
+import { getSafeRedirectPath } from "@/lib/public-destinations";
 import { splitCsv, signInSchema, signUpSchema } from "@/lib/validators/auth";
 import { slugify } from "@/lib/utils";
 import { redirect } from "next/navigation";
@@ -93,6 +94,9 @@ export async function signInAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const nextPath = getSafeRedirectPath(
+    typeof formData.get("next") === "string" ? String(formData.get("next")) : null,
+  );
   const parsed = signInSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -146,7 +150,7 @@ export async function signInAction(
       redirect("/profile?passwordReset=required");
     }
 
-    redirect(getHomeForRole(user.role, user.accessGrants));
+    redirect(nextPath ?? getHomeForRole(user.role, user.accessGrants));
   } catch (error) {
     logServerError("signInAction", error, {
       email: parsed.data.email.toLowerCase(),
@@ -177,6 +181,9 @@ export async function signUpAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  const nextPath = getSafeRedirectPath(
+    typeof formData.get("next") === "string" ? String(formData.get("next")) : null,
+  );
   const rawData = {
     name: formData.get("name"),
     email: formData.get("email"),
@@ -259,7 +266,7 @@ export async function signUpAction(
       });
 
       await createSession(buildSessionPayload(user));
-      redirect(getHomeForRole(user.role, user.accessGrants));
+      redirect(nextPath ?? getHomeForRole(user.role, user.accessGrants));
     }
 
     if (parsed.data.role === Role.MENTOR) {
@@ -297,7 +304,7 @@ export async function signUpAction(
       });
 
       await createSession(buildSessionPayload(user));
-      redirect(getHomeForRole(user.role, user.accessGrants));
+      redirect(nextPath ?? getHomeForRole(user.role, user.accessGrants));
     }
 
     if (parsed.data.role === Role.COMPANY) {
@@ -321,7 +328,7 @@ export async function signUpAction(
       await findOrCreateCompanyByName(parsed.data.companyName ?? `${parsed.data.name} Labs`, user.id);
 
       await createSession(buildSessionPayload(user));
-      redirect(getHomeForRole(user.role, user.accessGrants));
+      redirect(nextPath ?? getHomeForRole(user.role, user.accessGrants));
     }
 
     return { error: "Unsupported role selection." };

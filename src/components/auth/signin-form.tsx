@@ -8,11 +8,12 @@ import { signInAction, type ActionState } from "@/lib/actions/auth-actions";
 
 const initialState: ActionState = {};
 
-export function SignInForm() {
+export function SignInForm({ nextPath }: { nextPath?: string }) {
   const [state, formAction] = useActionState(signInAction, initialState);
 
   return (
     <form action={formAction} className="space-y-5">
+      {nextPath ? <input name="next" type="hidden" value={nextPath} /> : null}
       <div className="space-y-2">
         <label className="text-sm font-medium" htmlFor="email">
           Email
